@@ -8,8 +8,7 @@ class PnnController {
         partition_prefix,
         partition_length,
         bloc_min,
-        block_max,
-        length_number,
+        block_max, 
         service_id
       } = req.body;
 
@@ -17,8 +16,7 @@ class PnnController {
         !partition_prefix ||
         !partition_length ||
         !bloc_min ||
-        !block_max ||
-        !length_number ||
+        !block_max || 
         !service_id
       ) {
         return res.status(400).json({ message: "Tous les champs sont requis" });
@@ -35,8 +33,7 @@ class PnnController {
         partition_prefix,
         partition_length,
         bloc_min,
-        block_max,
-        length_number,
+        block_max, 
         service_id
       });
 
@@ -79,8 +76,7 @@ class PnnController {
         partition_prefix,
         partition_length,
         bloc_min,
-        block_max,
-        length_number,
+        block_max, 
         service_id
       } = req.body;
 
@@ -103,8 +99,7 @@ class PnnController {
       pnn.partition_prefix = partition_prefix;
       pnn.partition_length = partition_length;
       pnn.bloc_min = bloc_min;
-      pnn.block_max = block_max;
-      pnn.length_number = length_number;
+      pnn.block_max = block_max; 
       pnn.service_id = service_id;
       await pnn.save();
 

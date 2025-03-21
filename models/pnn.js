@@ -36,10 +36,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false
       },
-      length_number: {
-        type: DataTypes.INTEGER,
-        allowNull: false
-      },
+      // length_number: {
+      //   type: DataTypes.INTEGER,
+      //   allowNull: false
+      // },
       service_id: {
         type: DataTypes.INTEGER,
         allowNull: false,

@@ -25,10 +25,10 @@ module.exports = {
         type: Sequelize.INTEGER,
         allowNull: false
       },
-      length_number: {
-        type: Sequelize.INTEGER,
-        allowNull: false
-      },
+      // length_number: {
+      //   type: Sequelize.INTEGER,
+      //   allowNull: false
+      // },
       service_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
