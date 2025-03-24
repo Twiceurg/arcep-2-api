@@ -4,6 +4,7 @@ const PnnController = require("../controllers/actionController/pnnController");
 const ClientController = require("../controllers/actionController/clientController");
 const AttributionNumeroController = require("../controllers/actionController/attributionNumeroController");
 const TypeUtilisationController = require("../controllers/actionController/typeutilisationController");
+const CategoriesController = require("../controllers/actionController/categorieController");
 
 const router = express.Router();
 
@@ -12,6 +13,13 @@ router.post("/services", ServiceController.createService);
 router.get("/services", ServiceController.getAllServices);
 router.put("/services/:id", ServiceController.updateService);
 router.delete("/services/:id", ServiceController.deleteService);
+router.get("/services/category/:category_id", ServiceController.getServicesByCategory);
+
+// 📌 Route pour le CRUD des services
+router.post("/category", CategoriesController.createCategorie);
+router.get("/category", CategoriesController.getAllCategorie);
+router.put("/category/:id", CategoriesController.updateCategorie);
+router.delete("/category/:id", CategoriesController.deleteCategorie);
 
 // 📌 Route pour le CRUD des PNN
 router.post("/pnns", PnnController.createPnn);
@@ -20,6 +28,7 @@ router.put("/pnns/:id", PnnController.updatePnn);
 router.get("/pnns/:id", PnnController.getPnnById);
 router.delete("/pnns/:id", PnnController.deletePnn);
 router.get("/pnns/service/:serviceId", PnnController.getPnnsByServiceId);
+router.patch("/pnns/:id/toggle", PnnController.toggleEtat);
 
 // 📌 Route pour le CRUD des clients
 router.post("/clients", ClientController.createClient);

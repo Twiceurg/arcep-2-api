@@ -12,15 +12,23 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "service_id",
         as: "pnns"
       });
-      Service.hasMany(models.AttributionNumero, { 
-        foreignKey: "service_id", 
+      Service.hasMany(models.AttributionNumero, {
+        foreignKey: "service_id",
         as: "attributions"
       });
+      Service.belongsTo(models.Category, { foreignKey: "category_id" });
     }
   }
   Service.init(
     {
-      nom: DataTypes.STRING
+      nom: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      category_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      }
     },
     {
       sequelize,

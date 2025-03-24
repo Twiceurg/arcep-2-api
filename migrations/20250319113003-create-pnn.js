@@ -13,9 +13,13 @@ module.exports = {
         type: Sequelize.INTEGER,
         allowNull: false
       },
-      partition_length: {
+      partition_prefix_b: {
         type: Sequelize.INTEGER,
         allowNull: false
+      },
+      partition_length: {
+        type: Sequelize.INTEGER,
+        allowNull: true
       },
       bloc_min: {
         type: Sequelize.INTEGER,
@@ -38,6 +42,21 @@ module.exports = {
         },
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
+      },
+      category_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Categories",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
+      },
+      etat: {
+        type: Sequelize.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
       },
       created_at: {
         allowNull: false,

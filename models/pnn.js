@@ -16,6 +16,7 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "pnn_id",
         as: "attributions"
       });
+      Pnn.belongsTo(models.Category, { foreignKey: "category_id" });
     }
   }
   Pnn.init(
@@ -23,6 +24,10 @@ module.exports = (sequelize, DataTypes) => {
       partition_prefix: {
         type: DataTypes.INTEGER,
         allowNull: false
+      },
+      partition_prefix_b: {
+        type: DataTypes.INTEGER,
+        allowNull: true
       },
       partition_length: {
         type: DataTypes.INTEGER,
@@ -32,9 +37,18 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: false
       },
+      category_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
       block_max: {
         type: DataTypes.INTEGER,
         allowNull: false
+      },
+      etat: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
       },
       // length_number: {
       //   type: DataTypes.INTEGER,
