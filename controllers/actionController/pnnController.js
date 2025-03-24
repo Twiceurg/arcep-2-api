@@ -1,4 +1,4 @@
-const { Pnn, Service, AttributionNumero } = require("../../models");
+const { Pnn, Service, AttributionNumero, Category } = require("../../models");
 
 class PnnController {
   // 📌 Créer un PNN
@@ -9,18 +9,20 @@ class PnnController {
       const {
         partitionLength,
         partitionPrefix,
-        partitionPrefixB,
         selectedService,
         selectedCategory
       } = req.body;
 
+      let partitionPrefixB = req.body.partitionPrefixB || null;
+
       if (
         !partitionLength ||
-        !partitionPrefix ||
         !selectedService ||
         (parseInt(selectedCategory, 10) !== 1 && !partitionPrefixB)
       ) {
-        return res.status(400).json({ message: "Tous les champs sont requis" });
+        return res
+          .status(400)
+          .json({ message: "Tous les champs requis ne sont pas remplis" });
       }
 
       // Vérifier si le service existe
@@ -31,12 +33,19 @@ class PnnController {
 
       let prefixes = [];
 
-      // Gérer partitionPrefix sous forme de plage (ex: "1-9") ou de liste ("1,2,3")
-      if (partitionPrefix.includes("-")) {
-        const [start, end] = partitionPrefix.split("-").map(Number);
-        prefixes = Array.from({ length: end - start + 1 }, (_, i) => start + i);
+      // Gérer partitionPrefix (ou le mettre à null si vide)
+      if (partitionPrefix) {
+        if (partitionPrefix.includes("-")) {
+          const [start, end] = partitionPrefix.split("-").map(Number);
+          prefixes = Array.from(
+            { length: end - start + 1 },
+            (_, i) => start + i
+          );
+        } else {
+          prefixes = partitionPrefix.split(",").map(Number);
+        }
       } else {
-        prefixes = partitionPrefix.split(",").map(Number);
+        prefixes = [null]; // On insère un PNN sans partitionPrefix
       }
 
       console.log("Préfixes générés:", prefixes);
@@ -44,7 +53,7 @@ class PnnController {
       let prefixBList = [];
 
       // Vérification du type de selectedCategory
-      if (parseInt(selectedCategory, 10) !== 1) {
+      if (parseInt(selectedCategory, 10) !== 1 && partitionPrefixB) {
         if (partitionPrefixB.includes("-")) {
           const [startB, endB] = partitionPrefixB.split("-").map(Number);
           prefixBList = Array.from(
@@ -65,8 +74,8 @@ class PnnController {
 
       for (const prefix of prefixes) {
         if (parseInt(selectedCategory, 10) === 1) {
-          // Cas où on n'a pas de partitionPrefixB
-          const basePrefix = `${prefix}`;
+          // Cas où partitionPrefixB n'est pas utilisé
+          const basePrefix = prefix !== null ? `${prefix}` : "";
           const remainingLength = partitionLength - basePrefix.length;
 
           if (remainingLength < 0) {
@@ -75,8 +84,10 @@ class PnnController {
             });
           }
 
-          const bloc_min = parseInt(basePrefix + "0".repeat(remainingLength));
-          const block_max = parseInt(basePrefix + "9".repeat(remainingLength));
+          const bloc_min =
+            parseInt(basePrefix + "0".repeat(remainingLength)) || 0;
+          const block_max =
+            parseInt(basePrefix + "9".repeat(remainingLength)) || 9;
 
           console.log("Insertion du PNN (sans prefixB):", {
             partition_prefix: prefix,
@@ -89,6 +100,7 @@ class PnnController {
           const pnn = await Pnn.create({
             partition_prefix: prefix,
             partition_length: partitionLength,
+            category_id: selectedCategory,
             bloc_min,
             block_max,
             service_id: selectedService
@@ -96,9 +108,9 @@ class PnnController {
 
           pnnList.push(pnn);
         } else {
-          // Cas où on a partitionPrefixB
+          // Cas où partitionPrefixB est utilisé
           for (const prefixB of prefixBList) {
-            const basePrefix = `${prefix}${prefixB}`;
+            const basePrefix = (prefix !== null ? `${prefix}` : "") + prefixB;
             const remainingLength = partitionLength - basePrefix.length;
 
             if (remainingLength < 0) {
@@ -125,6 +137,7 @@ class PnnController {
               partition_prefix: prefix,
               partition_prefix_b: prefixB,
               partition_length: partitionLength,
+              category_id: selectedCategory,
               bloc_min,
               block_max,
               service_id: selectedService
@@ -152,7 +165,8 @@ class PnnController {
       const pnns = await Pnn.findAll({
         include: [
           { model: Service },
-          { model: AttributionNumero, as: "attributions" }
+          { model: AttributionNumero, as: "attributions" },
+          { model: Category }
         ]
       });
 

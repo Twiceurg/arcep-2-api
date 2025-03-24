@@ -15,11 +15,11 @@ module.exports = {
       },
       partition_prefix_b: {
         type: Sequelize.INTEGER,
-        allowNull: false
+        allowNull: true
       },
       partition_length: {
         type: Sequelize.INTEGER,
-        allowNull: true
+        allowNull: false
       },
       bloc_min: {
         type: Sequelize.INTEGER,
