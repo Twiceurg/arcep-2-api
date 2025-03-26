@@ -17,6 +17,7 @@ module.exports = (sequelize, DataTypes) => {
         as: "attributions"
       });
       Pnn.belongsTo(models.Category, { foreignKey: "category_id" });
+      Pnn.belongsTo(models.Utilisation, { foreignKey: "utilisation_id" });
     }
   }
   Pnn.init(
@@ -49,6 +50,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         allowNull: false,
         defaultValue: true
+      },
+      utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        }
       },
       // length_number: {
       //   type: DataTypes.INTEGER,

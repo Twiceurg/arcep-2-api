@@ -17,6 +17,9 @@ module.exports = (sequelize, DataTypes) => {
         as: "attributions"
       });
       Service.belongsTo(models.Category, { foreignKey: "category_id" });
+      Service.hasMany(models.Utilisation, {
+        foreignKey: 'service_id',
+      });
     }
   }
   Service.init(

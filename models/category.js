@@ -12,6 +12,9 @@ module.exports = (sequelize, DataTypes) => {
       // Ajouter des associations si nécessaire
       Category.hasMany(models.Service, { foreignKey: 'category_id' });
       Category.hasMany(models.Pnn, { foreignKey: 'category_id' });
+      Category.hasMany(models.Utilisation, {
+        foreignKey: 'category_id', 
+      });
     }
   }
 

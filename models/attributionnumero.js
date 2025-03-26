@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
       AttributionNumero.belongsTo(models.Service, { foreignKey: "service_id" });
       AttributionNumero.belongsTo(models.TypeUtilisation, { foreignKey: "type_utilisation_id" });
       AttributionNumero.belongsTo(models.Pnn, { foreignKey: "pnn_id" });
+      AttributionNumero.belongsTo(models.Utilisation, { foreignKey: "utilisation_id" });
    
     }
   }
@@ -41,6 +42,14 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: false,
         unique: true
+      },
+      utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        }
       },
       reference_decision: {
         type: DataTypes.STRING,

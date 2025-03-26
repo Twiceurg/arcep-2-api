@@ -51,6 +51,16 @@ module.exports = {
         onDelete: "SET NULL",
         onUpdate: "CASCADE"
       },
+      utilisation_id: {  
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations", 
+          key: "id"  
+        },
+        onUpdate: "CASCADE",  
+        onDelete: "SET NULL" 
+      },
       duree_utilisation: {
         type: Sequelize.INTEGER,
         allowNull: true

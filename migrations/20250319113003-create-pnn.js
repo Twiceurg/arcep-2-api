@@ -43,6 +43,16 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
+      utilisation_id: {  
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations", 
+          key: "id"  
+        },
+        onUpdate: "CASCADE",  
+        onDelete: "SET NULL" 
+      },
       category_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
@@ -67,6 +77,10 @@ module.exports = {
         type: Sequelize.DATE
       }
     });
+    // await queryInterface.sequelize.query(`
+    //   CREATE UNIQUE INDEX unique_partition_combination ON \`Pnns\`
+    //   (LEAST(partition_prefix, partition_prefix_b), GREATEST(partition_prefix, partition_prefix_b));
+    // `);
   },
   async down(queryInterface, Sequelize) {
     await queryInterface.dropTable("Pnns");

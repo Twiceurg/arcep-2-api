@@ -18,22 +18,52 @@ class AttributionNumeroController {
         duree_utilisation,
         numero_attribue,
         reference_decision,
-        etat_autorisation
+        etat_autorisation,
+        utilisation_id
       } = req.body;
 
       // Validation : vérifier que le numéro attribué est fourni
       if (!numero_attribue) {
         return res
           .status(400)
-          .json({ message: "Le numéro attribué est requis" });
+          .json({ success: false, message: "Le numéro attribué est requis" });
+      }
+      if (!utilisation_id) {
+        return res
+          .status(400)
+          .json({ success: false, message: "L attribution du service attribué est requis" });
+      }
+
+      // Vérifier si le PNN existe
+      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
+      if (!pnn) {
+        return res
+          .status(404)
+          .json({ success: false, message: "PNN introuvable" });
+      }
+
+      // Vérifier si le numéro est dans la plage autorisée
+      if (numero_attribue < pnn.bloc_min || numero_attribue > pnn.block_max) {
+        return res.status(400).json({
+          success: false,
+          message: "Le numéro attribué est en dehors de la plage autorisée"
+        });
       }
 
       // Vérifier si le numéro existe déjà
       const existingAttribution = await AttributionNumero.findOne({
-        where: { numero_attribue }
+        where: { numero_attribue },
+        include: [{ model: Client }]
       });
       if (existingAttribution) {
-        return res.status(409).json({ message: "Ce numéro est déjà attribué" });
+        return res.status(409).json({
+          success: false,
+          message: `Le numéro ${numero_attribue} a déjà été attribué à ${
+            existingAttribution.Client
+              ? existingAttribution.Client.denomination
+              : "un client inconnu"
+          }`
+        });
       }
 
       // Calcul de la date d'expiration
@@ -52,7 +82,8 @@ class AttributionNumeroController {
         numero_attribue,
         reference_decision,
         date_expiration: dateExpiration, // Date calculée
-        etat_autorisation
+        etat_autorisation ,
+        utilisation_id,
       });
 
       return res.status(201).json({
@@ -62,7 +93,9 @@ class AttributionNumeroController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res
+        .status(500)
+        .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 

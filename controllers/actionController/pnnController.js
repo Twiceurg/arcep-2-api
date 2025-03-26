@@ -10,7 +10,8 @@ class PnnController {
         partitionLength,
         partitionPrefix,
         selectedService,
-        selectedCategory
+        selectedCategory,
+        selectedUtilisation // Ajout de l'ID de l'utilisation
       } = req.body;
 
       let partitionPrefixB = req.body.partitionPrefixB || null;
@@ -18,7 +19,8 @@ class PnnController {
       if (
         !partitionLength ||
         !selectedService ||
-        (parseInt(selectedCategory, 10) !== 1 && !partitionPrefixB)
+        (parseInt(selectedCategory, 10) !== 1 && !partitionPrefixB) ||
+        !selectedUtilisation // Vérification si l'ID d'utilisation est présent
       ) {
         return res
           .status(400)
@@ -103,7 +105,8 @@ class PnnController {
             category_id: selectedCategory,
             bloc_min,
             block_max,
-            service_id: selectedService
+            service_id: selectedService,
+            utilisation_id: selectedUtilisation // Ajout de l'ID d'utilisation
           });
 
           pnnList.push(pnn);
@@ -140,7 +143,8 @@ class PnnController {
               category_id: selectedCategory,
               bloc_min,
               block_max,
-              service_id: selectedService
+              service_id: selectedService,
+              utilisation_id: selectedUtilisation // Ajout de l'ID d'utilisation
             });
 
             pnnList.push(pnn);
@@ -191,7 +195,8 @@ class PnnController {
         category_id,
         bloc_min,
         block_max,
-        service_id
+        service_id,
+        utilisationId // Ajout de l'ID de l'utilisation
       } = req.body;
 
       // Vérifier si le PNN existe
@@ -209,7 +214,14 @@ class PnnController {
         return res.status(404).json({ message: "Service non trouvé" });
       }
 
-      // Mise à jour
+      // Vérifier si utilisationId est présent
+      if (!utilisationId) {
+        return res.status(400).json({
+          message: "utilisationId est requis pour la mise à jour"
+        });
+      }
+
+      // Mise à jour des attributs
       pnn.partition_prefix = partition_prefix;
       pnn.partition_length = partition_length;
       pnn.partition_prefix_b = partition_prefix_b;
@@ -217,6 +229,8 @@ class PnnController {
       pnn.bloc_min = bloc_min;
       pnn.block_max = block_max;
       pnn.service_id = service_id;
+      pnn.utilisation_id = utilisationId; // Mise à jour de utilisation_id
+
       await pnn.save();
 
       return res.status(200).json({
@@ -307,6 +321,38 @@ class PnnController {
       return res.status(500).json({ message: "Erreur interne du serveur" });
     }
   }
+
+
+
+  static async getPnnsByUtilisationId(req, res) {
+    try {
+      const { utilisationId } = req.params;
+  
+      // Récupérer les PNNs associés à ce utilisation_id
+      const pnns = await Pnn.findAll({
+        where: { utilisation_id: utilisationId},
+        include: [
+          { model: Service },
+          { model: AttributionNumero, as: "attributions" }
+        ]
+      });
+  
+      if (pnns.length === 0) {
+        return res
+          .status(404)
+          .json({ message: "Aucun PNN trouvé pour ce type d'utilisation" });
+      }
+  
+      return res.status(200).json({
+        success: true,
+        pnns
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Erreur interne du serveur" });
+    }
+  }
+  
 
   static async toggleEtat(req, res) {
     try {
