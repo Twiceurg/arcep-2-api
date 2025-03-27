@@ -31,7 +31,7 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
-      pnn_id: { 
+      pnn_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
         references: {
@@ -41,7 +41,7 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
-      client_id: { 
+      client_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
         references: {
@@ -51,28 +51,21 @@ module.exports = {
         onDelete: "SET NULL",
         onUpdate: "CASCADE"
       },
-      utilisation_id: {  
+      utilisation_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
         references: {
-          model: "Utilisations", 
-          key: "id"  
+          model: "Utilisations",
+          key: "id"
         },
-        onUpdate: "CASCADE",  
-        onDelete: "SET NULL" 
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
       },
       duree_utilisation: {
         type: Sequelize.INTEGER,
         allowNull: true
       },
-      numero_attribue: {
-        // Correction du nom
-        type: Sequelize.STRING, // Correction du type (car un numéro peut avoir des zéros en tête)
-        allowNull: false,
-        unique: true
-      },
       reference_decision: {
-        // Correction du nom pour la cohérence
         type: Sequelize.STRING,
         allowNull: true
       },
