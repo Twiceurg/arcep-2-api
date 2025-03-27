@@ -134,7 +134,8 @@ class AttributionNumeroController {
           { model: Client },
           { model: Service },
           { model: TypeUtilisation },
-          { model: Pnn }
+          { model: Pnn },
+          { model: NumeroAttribue }
         ]
       });
 
@@ -154,7 +155,8 @@ class AttributionNumeroController {
           { model: Client, attributes: ["denomination"] },
           { model: Service, attributes: ["nom_service"] },
           { model: TypeUtilisation, attributes: ["libele_type"] },
-          { model: Pnn, attributes: ["partition_prefix"] }
+          { model: Pnn, attributes: ["partition_prefix"] },
+          { model: NumeroAttribue, attributes: ["numero_attribue"] }
         ]
       });
 
@@ -308,7 +310,8 @@ class AttributionNumeroController {
         include: [
           { model: Service },
           { model: TypeUtilisation },
-          { model: Pnn }
+          { model: Pnn },          
+          { model: NumeroAttribue}
         ]
       });
 

@@ -1,4 +1,10 @@
-const { Pnn, Service, AttributionNumero, Category } = require("../../models");
+const {
+  Pnn,
+  Service,
+  AttributionNumero,
+  Category,
+  Utilisation
+} = require("../../models");
 
 class PnnController {
   // 📌 Créer un PNN
@@ -11,17 +17,12 @@ class PnnController {
         partitionPrefix,
         selectedService,
         selectedCategory,
-        selectedUtilisation // Ajout de l'ID de l'utilisation
+        selectedUtilisation
       } = req.body;
 
       let partitionPrefixB = req.body.partitionPrefixB || null;
 
-      if (
-        !partitionLength ||
-        !selectedService ||
-        (parseInt(selectedCategory, 10) !== 1 && !partitionPrefixB) ||
-        !selectedUtilisation // Vérification si l'ID d'utilisation est présent
-      ) {
+      if (!partitionLength || !selectedService || !selectedUtilisation) {
         return res
           .status(400)
           .json({ message: "Tous les champs requis ne sont pas remplis" });
@@ -35,7 +36,7 @@ class PnnController {
 
       let prefixes = [];
 
-      // Gérer partitionPrefix (ou le mettre à null si vide)
+      // Traitement de partitionPrefix
       if (partitionPrefix) {
         if (partitionPrefix.includes("-")) {
           const [start, end] = partitionPrefix.split("-").map(Number);
@@ -54,8 +55,8 @@ class PnnController {
 
       let prefixBList = [];
 
-      // Vérification du type de selectedCategory
-      if (parseInt(selectedCategory, 10) !== 1 && partitionPrefixB) {
+      // Ne générer partitionPrefixB que s'il est renseigné
+      if (partitionPrefixB) {
         if (partitionPrefixB.includes("-")) {
           const [startB, endB] = partitionPrefixB.split("-").map(Number);
           prefixBList = Array.from(
@@ -69,14 +70,14 @@ class PnnController {
 
       console.log(
         "Préfixes B générés:",
-        prefixBList.length > 0 ? prefixBList : "Aucun (catégorie 1)"
+        prefixBList.length > 0 ? prefixBList : "Aucun"
       );
 
       let pnnList = [];
 
       for (const prefix of prefixes) {
-        if (parseInt(selectedCategory, 10) === 1) {
-          // Cas où partitionPrefixB n'est pas utilisé
+        if (!partitionPrefixB) {
+          // Cas où partitionPrefixB est vide
           const basePrefix = prefix !== null ? `${prefix}` : "";
           const remainingLength = partitionLength - basePrefix.length;
 
@@ -106,12 +107,12 @@ class PnnController {
             bloc_min,
             block_max,
             service_id: selectedService,
-            utilisation_id: selectedUtilisation // Ajout de l'ID d'utilisation
+            utilisation_id: selectedUtilisation
           });
 
           pnnList.push(pnn);
         } else {
-          // Cas où partitionPrefixB est utilisé
+          // Cas où partitionPrefixB est renseigné
           for (const prefixB of prefixBList) {
             const basePrefix = (prefix !== null ? `${prefix}` : "") + prefixB;
             const remainingLength = partitionLength - basePrefix.length;
@@ -144,7 +145,7 @@ class PnnController {
               bloc_min,
               block_max,
               service_id: selectedService,
-              utilisation_id: selectedUtilisation // Ajout de l'ID d'utilisation
+              utilisation_id: selectedUtilisation
             });
 
             pnnList.push(pnn);
@@ -170,7 +171,7 @@ class PnnController {
         include: [
           { model: Service },
           { model: AttributionNumero, as: "attributions" },
-          { model: Category }
+          { model: Utilisation }
         ]
       });
 
@@ -256,7 +257,8 @@ class PnnController {
       const pnn = await Pnn.findByPk(id, {
         include: [
           { model: Service }, // Inclure le service associé
-          { model: AttributionNumero, as: "attributions" } // Inclure les attributions associées
+          { model: AttributionNumero, as: "attributions" },
+          { model: Utilisation }
         ]
       });
 
@@ -322,27 +324,25 @@ class PnnController {
     }
   }
 
-
-
   static async getPnnsByUtilisationId(req, res) {
     try {
       const { utilisationId } = req.params;
-  
+
       // Récupérer les PNNs associés à ce utilisation_id
       const pnns = await Pnn.findAll({
-        where: { utilisation_id: utilisationId},
+        where: { utilisation_id: utilisationId },
         include: [
           { model: Service },
           { model: AttributionNumero, as: "attributions" }
         ]
       });
-  
+
       if (pnns.length === 0) {
         return res
           .status(404)
           .json({ message: "Aucun PNN trouvé pour ce type d'utilisation" });
       }
-  
+
       return res.status(200).json({
         success: true,
         pnns
@@ -352,7 +352,6 @@ class PnnController {
       return res.status(500).json({ message: "Erreur interne du serveur" });
     }
   }
-  
 
   static async toggleEtat(req, res) {
     try {
