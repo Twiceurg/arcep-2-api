@@ -6,6 +6,7 @@ const AttributionNumeroController = require("../controllers/actionController/att
 const TypeUtilisationController = require("../controllers/actionController/typeutilisationController");
 const CategoriesController = require("../controllers/actionController/categorieController");
 const utilisationController = require("../controllers/actionController/utilisationController");
+const demandeController = require("../controllers/actionController/demandeController");
 
 const router = express.Router();
 
@@ -33,7 +34,10 @@ router.get("/pnns/:id", PnnController.getPnnById);
 router.delete("/pnns/:id", PnnController.deletePnn);
 router.get("/pnns/service/:serviceId", PnnController.getPnnsByServiceId);
 router.patch("/pnns/:id/toggle", PnnController.toggleEtat);
-router.get('/pnns/utilisation/:utilisationId', PnnController.getPnnsByUtilisationId);
+router.get(
+  "/pnns/utilisation/:utilisationId",
+  PnnController.getPnnsByUtilisationId
+);
 
 // 📌 Route pour le CRUD des clients
 router.post("/clients", ClientController.createClient);
@@ -92,5 +96,13 @@ router.get(
 );
 router.put("/utilisations/:id", utilisationController.update);
 router.delete("/utilisations/:id", utilisationController.delete);
+
+// 📌 Route pour créer une nouvelle demande
+router.post("/demandes", demandeController.create);
+router.get("/demandes", demandeController.getAll);
+router.get("/demandes/:id", demandeController.getById);
+router.put("/demandes/:id", demandeController.update);
+router.delete("/demandes/:id", demandeController.delete);
+router.put("/demandes/:id/etat", demandeController.updateEtat);
 
 module.exports = router;

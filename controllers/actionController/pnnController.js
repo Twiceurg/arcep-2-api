@@ -222,13 +222,83 @@ class PnnController {
         });
       }
 
-      // Mise à jour des attributs
-      pnn.partition_prefix = partition_prefix;
-      pnn.partition_length = partition_length;
-      pnn.partition_prefix_b = partition_prefix_b;
-      pnn.category_id = category_id;
-      pnn.bloc_min = bloc_min;
-      pnn.block_max = block_max;
+      // Convertir partition_prefix et partition_prefix_b en chaînes si ce n'est pas déjà le cas
+      const partitionPrefixStr = String(partition_prefix);
+      const partitionPrefixBStr = partition_prefix_b
+        ? String(partition_prefix_b)
+        : null;
+
+      // Traitement des préfixes
+      let prefixes = [];
+      if (partitionPrefixStr) {
+        if (partitionPrefixStr.includes("-")) {
+          const [start, end] = partitionPrefixStr.split("-").map(Number);
+          prefixes = Array.from(
+            { length: end - start + 1 },
+            (_, i) => start + i
+          );
+        } else {
+          prefixes = partitionPrefixStr.split(",").map(Number);
+        }
+      }
+
+      let prefixBList = [];
+      if (partitionPrefixBStr) {
+        if (partitionPrefixBStr.includes("-")) {
+          const [startB, endB] = partitionPrefixBStr.split("-").map(Number);
+          prefixBList = Array.from(
+            { length: endB - startB + 1 },
+            (_, i) => startB + i
+          );
+        } else {
+          prefixBList = partitionPrefixBStr.split(",").map(Number);
+        }
+      }
+
+      // Mise à jour du PNN
+      for (const prefix of prefixes) {
+        if (!partitionPrefixBStr) {
+          // Cas où partitionPrefixB est vide
+          const basePrefix = prefix !== null ? `${prefix}` : "";
+          const remainingLength = partition_length - basePrefix.length;
+
+          if (remainingLength < 0) {
+            return res.status(400).json({
+              message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
+            });
+          }
+
+          pnn.partition_prefix = prefix;
+          pnn.partition_length = partition_length;
+          pnn.category_id = category_id;
+          pnn.bloc_min =
+            parseInt(basePrefix + "0".repeat(remainingLength)) || 0;
+          pnn.block_max =
+            parseInt(basePrefix + "9".repeat(remainingLength)) || 9;
+        } else {
+          // Cas où partitionPrefixB est renseigné
+          for (const prefixB of prefixBList) {
+            const basePrefix = (prefix !== null ? `${prefix}` : "") + prefixB;
+            const remainingLength = partition_length - basePrefix.length;
+
+            if (remainingLength < 0) {
+              return res.status(400).json({
+                message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
+              });
+            }
+
+            pnn.partition_prefix = prefix;
+            pnn.partition_prefix_b = prefixB;
+            pnn.partition_length = partition_length;
+            pnn.category_id = category_id;
+            pnn.bloc_min =
+              parseInt(basePrefix + "0".repeat(remainingLength)) || 0;
+            pnn.block_max =
+              parseInt(basePrefix + "9".repeat(remainingLength)) || 9;
+          }
+        }
+      }
+
       pnn.service_id = service_id;
       pnn.utilisation_id = utilisationId; // Mise à jour de utilisation_id
 
