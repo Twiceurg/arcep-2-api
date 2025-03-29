@@ -7,6 +7,7 @@ const TypeUtilisationController = require("../controllers/actionController/typeu
 const CategoriesController = require("../controllers/actionController/categorieController");
 const utilisationController = require("../controllers/actionController/utilisationController");
 const demandeController = require("../controllers/actionController/demandeController");
+const RapportController = require("../controllers/actionController/rapportController");
 
 const router = express.Router();
 
@@ -104,5 +105,15 @@ router.get("/demandes/:id", demandeController.getById);
 router.put("/demandes/:id", demandeController.update);
 router.delete("/demandes/:id", demandeController.delete);
 router.put("/demandes/:id/etat", demandeController.updateEtat);
+
+// 📌 CRUD des rapports
+router.post("/rapports", RapportController.createRapport);
+router.get("/rapports", RapportController.getAllRapports);
+router.get("/rapports/:id", RapportController.getRapportById);
+router.put("/rapports/:id", RapportController.updateRapport);
+router.delete("/rapports/:id", RapportController.deleteRapport);
+router.get("/rapports/attribution/:attribution_id", RapportController.getRapportsByAttribution);
+
+
 
 module.exports = router;

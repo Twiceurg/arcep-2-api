@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
       AttributionNumero.hasMany(models.NumeroAttribue, {
         foreignKey: "attribution_id"
       });
+      AttributionNumero.hasMany(models.Rapport, {
+        foreignKey: "attribution_id", 
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE"
+      });
     }
   }
   AttributionNumero.init(

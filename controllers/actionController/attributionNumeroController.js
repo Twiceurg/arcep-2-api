@@ -152,11 +152,11 @@ class AttributionNumeroController {
       const { id } = req.params;
       const attribution = await AttributionNumero.findByPk(id, {
         include: [
-          { model: Client, attributes: ["denomination"] },
-          { model: Service, attributes: ["nom_service"] },
-          { model: TypeUtilisation, attributes: ["libele_type"] },
-          { model: Pnn, attributes: ["partition_prefix"] },
-          { model: NumeroAttribue, attributes: ["numero_attribue"] }
+          { model: Client},
+          { model: Service},
+          { model: TypeUtilisation},
+          { model: Pnn },
+          { model: NumeroAttribue}
         ]
       });
 
