@@ -8,6 +8,7 @@ const CategoriesController = require("../controllers/actionController/categorieC
 const utilisationController = require("../controllers/actionController/utilisationController");
 const demandeController = require("../controllers/actionController/demandeController");
 const RapportController = require("../controllers/actionController/rapportController");
+const RenouvellementController = require("../controllers/actionController/RenouvellementController");
 
 const router = express.Router();
 
@@ -86,6 +87,10 @@ router.get(
   "/attribution/client/:client_id",
   AttributionNumeroController.getAttributionByClientId
 );
+router.put(
+  "/attribution/:id/assignReference",
+  AttributionNumeroController.assignReference
+);
 
 // 📌 Route pour créer une nouvelle utilisation
 router.post("/utilisations", utilisationController.create);
@@ -112,8 +117,25 @@ router.get("/rapports", RapportController.getAllRapports);
 router.get("/rapports/:id", RapportController.getRapportById);
 router.put("/rapports/:id", RapportController.updateRapport);
 router.delete("/rapports/:id", RapportController.deleteRapport);
-router.get("/rapports/attribution/:attribution_id", RapportController.getRapportsByAttribution);
+router.get(
+  "/rapports/attribution/:attribution_id",
+  RapportController.getRapportsByAttribution
+);
 
-
+// 🔹 Route pour créer un renouvellement
+router.post("/renouvellements", RenouvellementController.createRenouvellement);
+router.get("/renouvellements", RenouvellementController.getAllRenouvellements);
+router.get(
+  "/renouvellements/:id",
+  RenouvellementController.getRenouvellementById
+);
+router.put(
+  "/renouvellements/:id",
+  RenouvellementController.updateRenouvellement
+);
+router.delete(
+  "/renouvellements/:id",
+  RenouvellementController.deleteRenouvellement
+);
 
 module.exports = router;

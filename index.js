@@ -10,6 +10,7 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true,
 };
+require('./cron/expirationCron');
 
 
 app.use(cors(corsOptions));

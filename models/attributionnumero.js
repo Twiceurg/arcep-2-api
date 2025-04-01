@@ -21,9 +21,12 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.Rapport, {
-        foreignKey: "attribution_id", 
+        foreignKey: "attribution_id",
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
+      });
+      AttributionNumero.hasMany(models.Renouvellement, {
+        foreignKey: "attribution_id"
       });
     }
   }
@@ -62,18 +65,17 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
       date_attribution: {
-        type: DataTypes.DATE,
-        allowNull: false,
-        defaultValue: sequelize.literal("CURRENT_TIMESTAMP")
+        type: DataTypes.DATEONLY,
+        allowNull: true
       },
       date_expiration: {
-        type: DataTypes.DATE,
+        type: DataTypes.DATEONLY,
         allowNull: true
       },
       etat_autorisation: {
         type: DataTypes.BOOLEAN,
         allowNull: false,
-        defaultValue: true
+        defaultValue: false
       },
       created_at: {
         type: DataTypes.DATE,

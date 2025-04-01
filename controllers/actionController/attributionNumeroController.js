@@ -4,6 +4,9 @@ const {
   Service,
   TypeUtilisation,
   NumeroAttribue,
+  Utilisation,
+  Rapport,
+  Renouvellement,
   Pnn
 } = require("../../models");
 const { Op } = require("sequelize");
@@ -85,6 +88,7 @@ class AttributionNumeroController {
 
       // Calcul de la date d'expiration
       const dateExpiration = new Date();
+      const dateAttribution = new Date();
       dateExpiration.setFullYear(
         dateExpiration.getFullYear() + parseInt(duree_utilisation, 10)
       );
@@ -97,7 +101,6 @@ class AttributionNumeroController {
         client_id,
         duree_utilisation,
         reference_decision,
-        date_expiration: dateExpiration, // Date calculée
         etat_autorisation,
         utilisation_id
       });
@@ -134,8 +137,21 @@ class AttributionNumeroController {
           { model: Client },
           { model: Service },
           { model: TypeUtilisation },
-          { model: Pnn },
-          { model: NumeroAttribue }
+          {
+            model: Pnn,
+            include: [
+              {
+                model: Utilisation
+              }
+            ]
+          },
+          { model: NumeroAttribue },
+          { model: Rapport },
+          {
+            model: Renouvellement,
+            limit: 1,
+            order: [["date_renouvellement", "DESC"]]
+          }
         ]
       });
 
@@ -152,11 +168,11 @@ class AttributionNumeroController {
       const { id } = req.params;
       const attribution = await AttributionNumero.findByPk(id, {
         include: [
-          { model: Client},
-          { model: Service},
-          { model: TypeUtilisation},
+          { model: Client },
+          { model: Service },
+          { model: TypeUtilisation },
           { model: Pnn },
-          { model: NumeroAttribue}
+          { model: NumeroAttribue }
         ]
       });
 
@@ -310,8 +326,8 @@ class AttributionNumeroController {
         include: [
           { model: Service },
           { model: TypeUtilisation },
-          { model: Pnn },          
-          { model: NumeroAttribue}
+          { model: Pnn },
+          { model: NumeroAttribue }
         ]
       });
 
@@ -326,6 +342,55 @@ class AttributionNumeroController {
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
+    }
+  }
+
+  // la fontion pour assigner des references :
+
+  static async assignReference(req, res) {
+    try {
+      const { id } = req.params;
+      const { reference_decision, date_attribution } = req.body;
+
+      // Vérifier si l'attribution existe
+      const attribution = await AttributionNumero.findByPk(id);
+      if (!attribution) {
+        return res.status(404).json({ message: "Attribution non trouvée" });
+      }
+
+      // Vérifier si la référence est fournie
+      if (!reference_decision) {
+        return res.status(400).json({ message: "La référence est requise" });
+      }
+
+      // Vérifier si la date d'attribution est fournie
+      const attributionDate = date_attribution
+        ? new Date(date_attribution)
+        : new Date();
+
+      // Calcul de la date d'expiration en fonction de la durée d'utilisation
+      const dateExpiration = new Date(attributionDate);
+      dateExpiration.setFullYear(
+        dateExpiration.getFullYear() +
+          parseInt(attribution.duree_utilisation, 10)
+      );
+
+      // Mise à jour de l'attribution avec la nouvelle référence et la date d'expiration
+      attribution.reference_decision = reference_decision;
+      attribution.date_attribution = attributionDate;
+      attribution.date_expiration = dateExpiration;
+
+      // Sauvegarder les modifications
+      await attribution.save();
+
+      return res.status(200).json({
+        success: true,
+        message: "Référence assignée et attribution mise à jour avec succès",
+        attribution
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Erreur interne du serveur" });
     }
   }
 }

@@ -6,9 +6,7 @@ class RapportController {
     try {
       const {
         attribution_id,
-        ref,
-        creation_date,
-        revision,
+        revision = "00",
         ticket,
         demandeur,
         type_numeros,
@@ -30,12 +28,23 @@ class RapportController {
           .json({ success: false, message: "Attribution introuvable" });
       }
 
+      // Vérifier si un rapport existe déjà pour cette attribution
+      const existingRapport = await Rapport.findOne({
+        where: { attribution_id }
+      });
+
+      if (existingRapport) {
+        return res.status(400).json({
+          success: false,
+          message: "Cette attribution a déjà un rapport"
+        });
+      }
+
       // Création du rapport
       const rapport = await Rapport.create({
-        attribution_id,
-        ref,
-        creation_date,
-        revision,
+        attribution_id, 
+        creation_date: new Date(),
+        revision: revision || "00",
         ticket,
         demandeur,
         type_numeros,
@@ -140,13 +149,11 @@ class RapportController {
 
       await rapport.update(updatedData);
 
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "Rapport mis à jour avec succès",
-          rapport
-        });
+      return res.status(200).json({
+        success: true,
+        message: "Rapport mis à jour avec succès",
+        rapport
+      });
     } catch (error) {
       console.error("Erreur lors de la mise à jour du rapport :", error);
       return res

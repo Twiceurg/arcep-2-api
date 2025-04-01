@@ -141,7 +141,7 @@ module.exports = {
       etat: {
         type: Sequelize.ENUM("accepte", "rejete", "traite"),
         allowNull: true,
-        defaultValue: "en attente"
+        defaultValue: "accepte"
       },
 
       // -------- TIMESTAMPS --------
