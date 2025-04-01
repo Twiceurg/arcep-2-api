@@ -25,6 +25,10 @@ module.exports = (sequelize, DataTypes) => {
         },
         onDelete: "CASCADE"
       },
+      statut: {
+        type: DataTypes.ENUM("libre", "attribue"),
+        defaultValue: "attribue"
+      },
       numero_attribue: {
         type: DataTypes.STRING,
         allowNull: false

@@ -9,6 +9,7 @@ const utilisationController = require("../controllers/actionController/utilisati
 const demandeController = require("../controllers/actionController/demandeController");
 const RapportController = require("../controllers/actionController/rapportController");
 const RenouvellementController = require("../controllers/actionController/RenouvellementController");
+const controller = require("../controllers/actionController/NumeroAttribueController");
 
 const router = express.Router();
 
@@ -72,6 +73,7 @@ router.delete(
 
 // 📌 Route pour le CRUD des attributions
 router.post("/attribution", AttributionNumeroController.createAttribution);
+router.get("/attribution/bloc", AttributionNumeroController.getAllAttributionsBloc);
 router.get("/attribution", AttributionNumeroController.getAllAttributions);
 router.get("/attribution/:id", AttributionNumeroController.getAttributionById);
 router.put("/attribution/:id", AttributionNumeroController.updateAttribution);
@@ -137,5 +139,10 @@ router.delete(
   "/renouvellements/:id",
   RenouvellementController.deleteRenouvellement
 );
+
+
+//fontion pour l attibution de numero 
+router.get("/numeros", controller.getAllNumerosAvecAttribution);
+router.put("/numeros/:id/liberer", controller.libererNumeroAttribue);
 
 module.exports = router;

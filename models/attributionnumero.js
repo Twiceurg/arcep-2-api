@@ -49,7 +49,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
       duree_utilisation: {
-        type: DataTypes.INTEGER,
+        type: DataTypes.STRING,
         allowNull: true
       },
       utilisation_id: {

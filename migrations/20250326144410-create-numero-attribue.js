@@ -22,6 +22,11 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: false
       },
+      statut: {
+        type: Sequelize.ENUM('libre', 'attribue'),
+        defaultValue: 'libre',
+        allowNull: false
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,

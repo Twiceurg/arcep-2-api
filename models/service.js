@@ -13,10 +13,9 @@ module.exports = (sequelize, DataTypes) => {
         as: "pnns"
       });
       Service.hasMany(models.AttributionNumero, {
-        foreignKey: "service_id",
-        as: "attributions"
+        foreignKey: "service_id", 
       });
-      Service.belongsTo(models.Category, { foreignKey: "category_id" });
+      Service.belongsTo(models.Category, { foreignKey: "category_id"});
       Service.hasMany(models.Utilisation, {
         foreignKey: 'service_id',
       });
@@ -30,7 +29,12 @@ module.exports = (sequelize, DataTypes) => {
       },
       category_id: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        allowNull: true,
+        references: {
+          model: "Categories",
+          key: "id"
+        },
+        onDelete: "CASCADE"
       }
     },
     {

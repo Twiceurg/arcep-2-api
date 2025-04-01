@@ -7,6 +7,7 @@ const {
   Utilisation,
   Rapport,
   Renouvellement,
+  Category,
   Pnn
 } = require("../../models");
 const { Op } = require("sequelize");
@@ -20,7 +21,6 @@ class AttributionNumeroController {
         service_id,
         pnn_id,
         client_id,
-        duree_utilisation,
         numero_attribue, // Tableau des numéros attribués
         reference_decision,
         etat_autorisation,
@@ -87,21 +87,21 @@ class AttributionNumeroController {
       }
 
       // Calcul de la date d'expiration
-      const dateExpiration = new Date();
-      const dateAttribution = new Date();
-      dateExpiration.setFullYear(
-        dateExpiration.getFullYear() + parseInt(duree_utilisation, 10)
-      );
+      // const dateExpiration = new Date();
+      // const dateAttribution = new Date();
+      // dateExpiration.setFullYear(
+      //   dateExpiration.getFullYear() + parseInt(duree_utilisation, 10)
+      // );
 
+      const etatAutorisation = false;
       // Créer une seule attribution (si ce n'est pas déjà fait) pour tous les numéros
       const attribution = await AttributionNumero.create({
         type_utilisation_id,
         service_id,
         pnn_id,
         client_id,
-        duree_utilisation,
         reference_decision,
-        etat_autorisation,
+        etat_autorisation: etatAutorisation,
         utilisation_id
       });
 
@@ -135,15 +135,14 @@ class AttributionNumeroController {
       const attributions = await AttributionNumero.findAll({
         include: [
           { model: Client },
-          { model: Service },
+          {
+            model: Service,
+            include: [{ model: Category }] // 👈 Inclure `Category` pour pouvoir filtrer après
+          },
           { model: TypeUtilisation },
           {
             model: Pnn,
-            include: [
-              {
-                model: Utilisation
-              }
-            ]
+            include: [{ model: Utilisation }]
           },
           { model: NumeroAttribue },
           { model: Rapport },
@@ -155,7 +154,49 @@ class AttributionNumeroController {
         ]
       });
 
-      return res.status(200).json(attributions);
+      // 🛑 Filtrage en JavaScript après récupération
+      const filteredAttributions = attributions.filter(
+        (attr) => attr.Service && attr.Service.Category.id !== 1
+      );
+
+      return res.status(200).json(filteredAttributions);
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Erreur interne du serveur" });
+    }
+  }
+
+  static async getAllAttributionsBloc(req, res) {
+    try {
+      const attributions = await AttributionNumero.findAll({
+        include: [
+          { model: Client },
+          {
+            model: Service,
+            include: [{ model: Category }] // 👈 Inclure `Category` pour pouvoir filtrer après
+          },
+          { model: TypeUtilisation },
+          {
+            model: Pnn,
+            include: [{ model: Utilisation }]
+          },
+          { model: NumeroAttribue },
+          { model: Rapport },
+          {
+            model: Renouvellement,
+            limit: 1,
+            order: [["date_renouvellement", "DESC"]]
+          }
+        ]
+      });
+
+      // 🛑 Filtrage en JavaScript après récupération
+      const filteredAttributions = attributions.filter(
+        (attr) => attr.Service && attr.Service.Category.id === 1
+      );
+
+      console.log(filteredAttributions);
+      return res.status(200).json(filteredAttributions);
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur interne du serveur" });
@@ -261,7 +302,7 @@ class AttributionNumeroController {
   }
 
   // 📌 Récupérer tous les numéros attribués pour un PNN
-  static async getAssignedNumbersByPnn(req, res) {
+  static async getAssignedNumbersByPnn(req, res) {+6
     try {
       const { pnn_id } = req.params;
 
@@ -291,7 +332,8 @@ class AttributionNumeroController {
         where: {
           attribution_id: {
             [Op.in]: attributionIds // Rechercher les numéros attribués pour ces attributions
-          }
+          },
+          statut: "attribue"
         },
         attributes: ["numero_attribue"] // On récupère seulement les numéros attribués
       });
@@ -350,13 +392,25 @@ class AttributionNumeroController {
   static async assignReference(req, res) {
     try {
       const { id } = req.params;
-      const { reference_decision, date_attribution } = req.body;
+      const { reference_decision, date_attribution, duree_utilisation } =
+        req.body;
 
-      // Vérifier si l'attribution existe
-      const attribution = await AttributionNumero.findByPk(id);
+      // Vérifier si l'attribution existe avec son service
+      const attribution = await AttributionNumero.findByPk(id, {
+        include: [{ model: Service, include: [{ model: Category }] }]
+      });
+
       if (!attribution) {
         return res.status(404).json({ message: "Attribution non trouvée" });
       }
+
+      // Vérifier si le service associé a category_id = 1
+      const categoryId =
+        attribution.Service && attribution.Service.Category
+          ? attribution.Service.Category.id
+          : null;
+
+      console.log("Category ID:", categoryId);
 
       // Vérifier si la référence est fournie
       if (!reference_decision) {
@@ -368,17 +422,41 @@ class AttributionNumeroController {
         ? new Date(date_attribution)
         : new Date();
 
-      // Calcul de la date d'expiration en fonction de la durée d'utilisation
-      const dateExpiration = new Date(attributionDate);
-      dateExpiration.setFullYear(
-        dateExpiration.getFullYear() +
-          parseInt(attribution.duree_utilisation, 10)
-      );
+      let dateExpiration = null; // On ne définit pas la date d'expiration par défaut
 
-      // Mise à jour de l'attribution avec la nouvelle référence et la date d'expiration
+      if (categoryId !== 1) {
+        // Si la catégorie N'EST PAS 1, on prend en compte la durée
+        const match = duree_utilisation
+          ? duree_utilisation.match(/^(\d+)\s*(mois|ans)$/i)
+          : null;
+
+        if (!match) {
+          return res.status(400).json({
+            message:
+              "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
+          });
+        }
+
+        const duree = parseInt(match[1], 10);
+        const unite = match[2].toLowerCase();
+        let dureeEnMois = duree;
+
+        if (unite === "ans") {
+          dureeEnMois *= 12; // Convertir en mois si c'est en années
+        }
+
+        // Calcul de la date d'expiration
+        dateExpiration = new Date(attributionDate);
+        dateExpiration.setMonth(dateExpiration.getMonth() + dureeEnMois);
+      }
+
+      // Mise à jour de l'attribution avec la nouvelle référence
       attribution.reference_decision = reference_decision;
       attribution.date_attribution = attributionDate;
-      attribution.date_expiration = dateExpiration;
+      attribution.date_expiration = dateExpiration; // Peut être `null` si category_id = 1
+      attribution.duree_utilisation =
+        categoryId === 1 ? null : duree_utilisation;
+      attribution.etat_autorisation = true;
 
       // Sauvegarder les modifications
       await attribution.save();

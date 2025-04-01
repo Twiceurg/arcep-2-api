@@ -62,7 +62,7 @@ module.exports = {
         onDelete: "SET NULL"
       },
       duree_utilisation: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.STRING,
         allowNull: true
       },
       reference_decision: {

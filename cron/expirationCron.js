@@ -5,13 +5,15 @@ const Sequelize = require('sequelize');
 const verifierExpirationEtDesactiver = async () => {
   try {
     const attributions = await AttributionNumero.findAll({
-      where: {
-        date_expiration: {
-          [Sequelize.Op.lt]: new Date()
-        },
-        etat_autorisation: true
-      }
-    });
+        where: {
+          date_expiration: {
+            [Sequelize.Op.ne]: null, 
+            [Sequelize.Op.lt]: new Date() 
+          },
+          etat_autorisation: true
+        }
+      });
+      
 
     for (let attribution of attributions) {
       attribution.etat_autorisation = false;
