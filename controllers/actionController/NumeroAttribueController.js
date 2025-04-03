@@ -1,4 +1,4 @@
-const { NumeroAttribue, AttributionNumero, Client } = require("../../models");
+const { NumeroAttribue, AttributionNumero,AttributionDecision, Client } = require("../../models");
 
 // ✅ Récupérer tous les numéros avec leur attribution et le client associé
 exports.getAllNumerosAvecAttribution = async (req, res) => {
@@ -7,10 +7,18 @@ exports.getAllNumerosAvecAttribution = async (req, res) => {
       include: [
         {
           model: AttributionNumero,
-          include: [{ model: Client }] // Jointure avec Client
+          include: [
+            {
+              model: AttributionDecision,
+              limit: 1,
+              order: [["created_at", "DESC"]]
+            },
+            { model: Client } // Jointure avec Client
+          ]
         }
       ]
     });
+    
 
     if (numeros.length === 0) {
       return res.status(200).json({ success: true, message: "Aucun numéro trouvé", numeros: [] });

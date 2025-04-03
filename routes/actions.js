@@ -10,6 +10,9 @@ const demandeController = require("../controllers/actionController/demandeContro
 const RapportController = require("../controllers/actionController/rapportController");
 const RenouvellementController = require("../controllers/actionController/RenouvellementController");
 const controller = require("../controllers/actionController/NumeroAttribueController");
+const authenticateToken = require("../middleware/authenticateToken");
+const historiqueAttributionController = require("../controllers/actionController/historiqueAtributionController");
+const upload = require("../utils/multer");
 
 const router = express.Router();
 
@@ -73,10 +76,19 @@ router.delete(
 
 // 📌 Route pour le CRUD des attributions
 router.post("/attribution", AttributionNumeroController.createAttribution);
-router.get("/attribution/bloc", AttributionNumeroController.getAllAttributionsBloc);
+router.get(
+  "/attribution/bloc",
+  AttributionNumeroController.getAllAttributionsBloc
+);
 router.get("/attribution", AttributionNumeroController.getAllAttributions);
 router.get("/attribution/:id", AttributionNumeroController.getAttributionById);
+router.get("/attribution/:id/decisions", AttributionNumeroController.getAttributionDecisions);
 router.put("/attribution/:id", AttributionNumeroController.updateAttribution);
+router.post(
+  "/attribution/suspension",
+  authenticateToken,
+  AttributionNumeroController.appliquerSuspension
+);
 router.delete(
   "/attribution/:id",
   AttributionNumeroController.deleteAttribution
@@ -91,6 +103,7 @@ router.get(
 );
 router.put(
   "/attribution/:id/assignReference",
+  upload.single("file"),
   AttributionNumeroController.assignReference
 );
 
@@ -140,9 +153,25 @@ router.delete(
   RenouvellementController.deleteRenouvellement
 );
 
-
-//fontion pour l attibution de numero 
+//fontion pour l attibution de numero
 router.get("/numeros", controller.getAllNumerosAvecAttribution);
 router.put("/numeros/:id/liberer", controller.libererNumeroAttribue);
+
+//hisotrique
+router.get(
+  "/historique/:attribution_id",
+  historiqueAttributionController.getHistoriqueByAttribution
+);
+router.post(
+  "/historique/suspension",
+  authenticateToken,
+  upload.single("fichier"),
+  historiqueAttributionController.appliquerSuspension
+);
+router.put(
+  "/historique/assign-reference/:id",
+  upload.single("file"),
+  historiqueAttributionController.assignReference
+);
 
 module.exports = router;

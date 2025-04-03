@@ -28,6 +28,9 @@ module.exports = (sequelize, DataTypes) => {
       AttributionNumero.hasMany(models.Renouvellement, {
         foreignKey: "attribution_id"
       });
+      AttributionNumero.hasMany(models.AttributionDecision, {
+        foreignKey: 'attribution_id',
+      });
     }
   }
   AttributionNumero.init(

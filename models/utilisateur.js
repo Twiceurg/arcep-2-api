@@ -6,6 +6,9 @@ module.exports = (sequelize, DataTypes) => {
       Utilisateur.hasMany(models.HistoriqueConnexion, {
         foreignKey: "utilisateur_id"
       });
+      Utilisateur.hasMany(models.HistoriqueAttribution, {
+        foreignKey: "utilisateur_id"
+      });
     }
   }
   Utilisateur.init(
