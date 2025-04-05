@@ -1,74 +1,161 @@
-const { Renouvellement, AttributionNumero } = require("../../models");
+const { Renouvellement, AttributionNumero,Service,Category,AttributionDecision } = require("../../models");
 
 const RenouvellementController = {
   // 🔹 Créer un renouvellement
-  async createRenouvellement(req, res) {
+  // async createRenouvellement(req, res) {
+  //   try {
+  //     const { attribution_id, decision_renouvellement, date_renouvellement } =
+  //       req.body;
+
+  //     // Vérifier si l'attribution existe
+  //     const attribution = await AttributionNumero.findByPk(attribution_id);
+  //     if (!attribution) {
+  //       return res
+  //         .status(404)
+  //         .json({ success: false, message: "Attribution non trouvée" });
+  //     }
+
+  //     // Vérifier si l'attribution a une durée d'utilisation définie
+  //     if (!attribution.duree_utilisation) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message: "La durée d'utilisation de l'attribution est requise"
+  //       });
+  //     }
+
+  //     // Vérifier si l'attribution est expirée
+  //     const currentDate = new Date(); // Date actuelle
+  //     const expirationDate = new Date(attribution.date_expiration); // Date d'expiration de l'attribution
+
+  //     // Si la date d'expiration n'est pas encore passée, l'attribution ne peut pas être renouvelée
+  //     if (expirationDate >= currentDate) {
+  //       return res.status(400).json({
+  //         success: false,
+  //         message:
+  //           "L'attribution n'est pas expirée et ne peut pas être renouvelée."
+  //       });
+  //     }
+
+  //     // Calculer la date d'expiration du renouvellement
+  //     let dateExpiration = new Date(date_renouvellement);
+  //     dateExpiration.setMonth(
+  //       dateExpiration.getMonth() + attribution.duree_utilisation
+  //     ); // Ajoute la durée à la date de renouvellement
+
+  //     // Créer le renouvellement avec la date d'expiration calculée
+  //     const renouvellement = await Renouvellement.create({
+  //       attribution_id,
+  //       decision_renouvellement,
+  //       date_renouvellement,
+  //       date_expiration_renouvellement: dateExpiration
+  //     });
+
+  //     // Mettre à jour l'attribution en définissant 'etat_autorisation' sur true
+  //     await attribution.update({
+  //       etat_autorisation: true,
+  //       date_expiration: dateExpiration // Mettre à jour la date d'expiration de l'attribution
+  //     });
+
+  //     return res.status(201).json({
+  //       success: true,
+  //       message: "Renouvellement créé avec succès",
+  //       renouvellement
+  //     });
+  //   } catch (error) {
+  //     console.error(error);
+  //     return res
+  //       .status(500)
+  //       .json({ success: false, message: "Erreur serveur" });
+  //   }
+  // },
+
+  async renewAttribution(req, res) {
     try {
-      const { attribution_id, decision_renouvellement, date_renouvellement } =
-        req.body;
+      // const { attribution_id } = req.params;
+      const {attribution_id, decision_renouvellement, date_attribution } = req.body;
+      const file = req.file;
 
-      // Vérifier si l'attribution existe
-      const attribution = await AttributionNumero.findByPk(attribution_id);
+      const attribution = await AttributionNumero.findByPk(attribution_id, {
+        include: [{ model: Service, include: [{ model: Category }] }]
+      });
+
       if (!attribution) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Attribution non trouvée" });
+        return res.status(404).json({ message: "Attribution non trouvée" });
       }
 
-      // Vérifier si l'attribution a une durée d'utilisation définie
-      if (!attribution.duree_utilisation) {
-        return res.status(400).json({
-          success: false,
-          message: "La durée d'utilisation de l'attribution est requise"
+      const categoryId =
+        attribution.Service && attribution.Service.Category
+          ? attribution.Service.Category.id
+          : null;
+
+      if (!decision_renouvellement) {
+        return res.status(400).json({ message: "La référence est requise" });
+      }
+
+      const attributionDate = date_attribution
+        ? new Date(date_attribution)
+        : new Date();
+
+      let dateExpiration = null;
+      let duree_utilisation = null;
+
+      if (categoryId !== 1) {
+        // 🔍 Récupérer la décision initiale pour cette attribution
+        const decisionInitiale = await AttributionDecision.findOne({
+          where: {
+            attribution_id: attribution.id,
+            type_decision: "attribution"
+          },
+          order: [["created_at", "ASC"]]
         });
+
+        if (!decisionInitiale || !decisionInitiale.duree_utilisation) {
+          return res.status(400).json({
+            message:
+              "Durée d'utilisation introuvable dans la décision initiale."
+          });
+        }
+
+        duree_utilisation = decisionInitiale.duree_utilisation;
+
+        // Recalculer la date d'expiration à partir de la durée
+        const match = duree_utilisation.match(/^(\d+)\s*(mois|ans)$/i);
+        if (!match) {
+          return res
+            .status(400)
+            .json({ message: "Durée d'utilisation invalide." });
+        }
+
+        const duree = parseInt(match[1], 10);
+        const unite = match[2].toLowerCase();
+        const dureeEnMois = unite === "ans" ? duree * 12 : duree;
+
+        dateExpiration = new Date(attributionDate);
+        dateExpiration.setMonth(dateExpiration.getMonth() + dureeEnMois);
       }
 
-      // Vérifier si l'attribution est expirée
-      const currentDate = new Date(); // Date actuelle
-      const expirationDate = new Date(attribution.date_expiration); // Date d'expiration de l'attribution
-
-      // Si la date d'expiration n'est pas encore passée, l'attribution ne peut pas être renouvelée
-      if (expirationDate >= currentDate) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "L'attribution n'est pas expirée et ne peut pas être renouvelée."
-        });
-      }
-
-      // Calculer la date d'expiration du renouvellement
-      let dateExpiration = new Date(date_renouvellement);
-      dateExpiration.setMonth(
-        dateExpiration.getMonth() + attribution.duree_utilisation
-      ); // Ajoute la durée à la date de renouvellement
-
-      // Créer le renouvellement avec la date d'expiration calculée
-      const renouvellement = await Renouvellement.create({
-        attribution_id,
-        decision_renouvellement,
-        date_renouvellement,
-        date_expiration_renouvellement: dateExpiration
-      });
-
-      // Mettre à jour l'attribution en définissant 'etat_autorisation' sur true
-      await attribution.update({
+      // ✅ Créer la décision de renouvellement
+      const renouvellementDecision = await AttributionDecision.create({
+        attribution_id: attribution.id,
+        reference_decision:decision_renouvellement,
+        date_attribution: attributionDate,
+        date_expiration: dateExpiration,
+        duree_utilisation, // même durée que la décision initiale
         etat_autorisation: true,
-        date_expiration: dateExpiration // Mettre à jour la date d'expiration de l'attribution
+        fichier: file ? `/uploads/${file.filename}` : null,
+        type_decision: "renouvellement"
       });
 
-      return res.status(201).json({
+      return res.status(200).json({
         success: true,
-        message: "Renouvellement créé avec succès",
-        renouvellement
+        message: "Renouvellement effectué avec succès",
+        renouvellementDecision
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
-        .json({ success: false, message: "Erreur serveur" });
+      return res.status(500).json({ message: "Erreur interne du serveur" });
     }
   },
-
   // 🔹 Obtenir tous les renouvellements
   async getAllRenouvellements(req, res) {
     try {

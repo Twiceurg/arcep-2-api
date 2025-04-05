@@ -23,7 +23,7 @@ module.exports = {
         allowNull: false
       },
       statut: {
-        type: Sequelize.ENUM('libre', 'attribue','suspendu'),
+        type: Sequelize.ENUM('libre', 'attribue','suspendu','retiré'),
         defaultValue: 'libre',
         allowNull: false
       },

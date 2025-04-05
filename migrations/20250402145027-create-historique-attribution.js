@@ -38,7 +38,7 @@ module.exports = {
         allowNull: false,
       },
       type_modification: {
-        type: Sequelize.ENUM("modification", "reclamation", "suspension"),
+        type: Sequelize.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation"),
         allowNull: false,
       },
       date_debut: {

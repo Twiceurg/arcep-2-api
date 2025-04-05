@@ -26,6 +26,7 @@ class AttributionNumeroController {
         numero_attribue, // Tableau des numéros attribués
         reference_decision,
         etat_autorisation,
+        regle,
         utilisation_id
       } = req.body;
 
@@ -102,6 +103,7 @@ class AttributionNumeroController {
         service_id,
         pnn_id,
         client_id,
+        regle,
         reference_decision,
         etat_autorisation: etatAutorisation,
         utilisation_id
@@ -342,42 +344,290 @@ class AttributionNumeroController {
         service_id,
         pnn_id,
         client_id,
-        duree_utilisation,
         numero_attribue,
         reference_decision,
-        etat_autorisation
+        regle,
+        utilisation_id,
+        motif // ✅ Ajout du motif
       } = req.body;
 
+      const file = req.file; // ✅ Récupération du fichier
+
+      if (
+        !numero_attribue ||
+        !Array.isArray(numero_attribue) ||
+        numero_attribue.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Le tableau des numéros attribués est requis et doit être un tableau non vide"
+        });
+      }
+
       // Vérifier si l'attribution existe
-      const attribution = await AttributionNumero.findByPk(id);
+      const attribution = await AttributionNumero.findByPk(id, {
+        include: [{ model: AttributionDecision }] // Inclure les décisions
+      });
+
       if (!attribution) {
         return res.status(404).json({ message: "Attribution non trouvée" });
       }
 
-      // Mise à jour des champs
+      // ✅ Récupération de la durée d'utilisation depuis AttributionDecision
+      const dureeSuspension =
+        attribution.AttributionDecision?.duree_utilisation; // Par défaut 12 mois
+      const dateDebut = new Date(); // Date actuelle
+      const dateFinSuspension = new Date(dateDebut);
+      dateFinSuspension.setMonth(dateDebut.getMonth() + dureeSuspension);
+
+      // Vérifier si le PNN existe
+      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
+      if (!pnn) {
+        return res
+          .status(404)
+          .json({ success: false, message: "PNN introuvable" });
+      }
+      console.log("PNN:", pnn);
+      console.log("Bloc Min:", pnn.bloc_min);
+      console.log("Bloc Max:", pnn.block_max);
+      // Vérifier que chaque numéro est valide
+      for (const numero of numero_attribue) {
+        if (numero < pnn.bloc_min || numero > pnn.block_max) {
+          return res.status(400).json({
+            success: false,
+            message: `Le numéro ${numero} est en dehors de la plage autorisée`
+          });
+        }
+      }
+
+      // Vérifier si un numéro appartient déjà à l'attribution actuelle
+      const existingNumbers = await NumeroAttribue.findAll({
+        where: { numero_attribue: { [Op.in]: numero_attribue } }
+      });
+
+      // Liste des numéros déjà attribués à cette attribution
+      const existingAssignedNumbers = existingNumbers.filter(
+        (num) => num.attribution_id === attribution.id
+      );
+
+      // Liste des nouveaux numéros
+      const numbersToAdd = numero_attribue.filter(
+        (numero) =>
+          !existingAssignedNumbers
+            .map((num) => num.numero_attribue)
+            .includes(numero)
+      );
+
+      // Vérifier si les nouveaux numéros sont déjà attribués ailleurs
+      const conflictNumbers = existingNumbers
+        .filter((num) => num.attribution_id !== attribution.id)
+        .map((num) => num.numero_attribue);
+
+      if (conflictNumbers.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
+            ", "
+          )}`
+        });
+      }
+
+      // Mise à jour de l'attribution
       attribution.type_utilisation_id = type_utilisation_id;
       attribution.service_id = service_id;
       attribution.pnn_id = pnn_id;
       attribution.client_id = client_id;
-      attribution.duree_utilisation = duree_utilisation;
-      attribution.numero_attribue = numero_attribue;
-      attribution.reference_decision = reference_decision;
-      attribution.etat_autorisation = etat_autorisation;
-
-      // Recalcul de la date d'expiration si une nouvelle durée est fournie
-      if (duree_utilisation) {
-        const dateExpiration = new Date();
-        dateExpiration.setFullYear(
-          dateExpiration.getFullYear() + parseInt(duree_utilisation, 10)
-        );
-        attribution.date_expiration = dateExpiration;
-      }
-
+      attribution.regle = regle;
+      attribution.utilisation_id = utilisation_id;
       await attribution.save();
+
+      // Supprimer les anciens numéros non utilisés
+      await NumeroAttribue.destroy({
+        where: {
+          attribution_id: attribution.id,
+          numero_attribue: { [Op.notIn]: numero_attribue }
+        }
+      });
+
+      // Ajouter les nouveaux numéros attribués
+      const numeroAttribueEntries = numbersToAdd.map((numero) => ({
+        attribution_id: attribution.id,
+        numero_attribue: numero,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      await NumeroAttribue.bulkCreate(numeroAttribueEntries);
+
+      const fichierUrl = file ? `/uploads/${file.filename}` : null;
+
+      await HistoriqueAttribution.create({
+        attribution_id: attribution.id,
+        reference_modification: null,
+        motif: motif || "Modification de l'attribution",
+        utilisateur_id: req.user.id,
+        type_modification: "modification",
+        date_debut: dateDebut,
+        duree_suspension: dureeSuspension,
+        date_fin_suspension: dateFinSuspension,
+        appliquee: false,
+        fichier: fichierUrl
+      });
 
       return res.status(200).json({
         success: true,
         message: "Attribution mise à jour avec succès",
+        attribution
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Erreur interne du serveur" });
+    }
+  }
+
+  // 📌 Mettre à jour une attribution en faisant la reclamation
+  static async reclamerAttribution(req, res) {
+    try {
+      const { id } = req.params;
+      const {
+        type_utilisation_id,
+        service_id,
+        pnn_id,
+        client_id,
+        numero_attribue, 
+        regle,
+        utilisation_id,
+        motif // ✅ Ajout du motif
+      } = req.body;
+
+      const file = req.file; // ✅ Récupération du fichier
+
+      if (
+        !numero_attribue ||
+        !Array.isArray(numero_attribue) ||
+        numero_attribue.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Le tableau des numéros attribués est requis et doit être un tableau non vide"
+        });
+      }
+
+      // Vérifier si l'attribution existe
+      const attribution = await AttributionNumero.findByPk(id, {
+        include: [{ model: AttributionDecision }] // Inclure les décisions
+      });
+
+      if (!attribution) {
+        return res.status(404).json({ message: "Attribution non trouvée" });
+      }
+
+      // ✅ Récupération de la durée d'utilisation depuis AttributionDecision
+      const dureeSuspension =
+        attribution.AttributionDecision?.duree_utilisation; // Par défaut 12 mois
+      const dateDebut = new Date(); // Date actuelle
+      const dateFinSuspension = new Date(dateDebut);
+      dateFinSuspension.setMonth(dateDebut.getMonth() + dureeSuspension);
+
+      // Vérifier si le PNN existe
+      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
+      if (!pnn) {
+        return res
+          .status(404)
+          .json({ success: false, message: "PNN introuvable" });
+      }
+      console.log("PNN:", pnn);
+      console.log("Bloc Min:", pnn.bloc_min);
+      console.log("Bloc Max:", pnn.block_max);
+      // Vérifier que chaque numéro est valide
+      for (const numero of numero_attribue) {
+        if (numero < pnn.bloc_min || numero > pnn.block_max) {
+          return res.status(400).json({
+            success: false,
+            message: `Le numéro ${numero} est en dehors de la plage autorisée`
+          });
+        }
+      }
+
+      // Vérifier si un numéro appartient déjà à l'attribution actuelle
+      const existingNumbers = await NumeroAttribue.findAll({
+        where: { numero_attribue: { [Op.in]: numero_attribue } }
+      });
+
+      // Liste des numéros déjà attribués à cette attribution
+      const existingAssignedNumbers = existingNumbers.filter(
+        (num) => num.attribution_id === attribution.id
+      );
+
+      // Liste des nouveaux numéros
+      const numbersToAdd = numero_attribue.filter(
+        (numero) =>
+          !existingAssignedNumbers
+            .map((num) => num.numero_attribue)
+            .includes(numero)
+      );
+
+      // Vérifier si les nouveaux numéros sont déjà attribués ailleurs
+      const conflictNumbers = existingNumbers
+        .filter((num) => num.attribution_id !== attribution.id)
+        .map((num) => num.numero_attribue);
+
+      if (conflictNumbers.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
+            ", "
+          )}`
+        });
+      }
+
+      // Mise à jour de l'attribution
+      attribution.type_utilisation_id = type_utilisation_id;
+      attribution.service_id = service_id;
+      attribution.pnn_id = pnn_id;
+      attribution.client_id = client_id;
+      attribution.regle = regle;
+      attribution.utilisation_id = utilisation_id;
+      await attribution.save();
+
+      // Supprimer les anciens numéros non utilisés
+      await NumeroAttribue.destroy({
+        where: {
+          attribution_id: attribution.id,
+          numero_attribue: { [Op.notIn]: numero_attribue }
+        }
+      });
+
+      // Ajouter les nouveaux numéros attribués
+      const numeroAttribueEntries = numbersToAdd.map((numero) => ({
+        attribution_id: attribution.id,
+        numero_attribue: numero,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      await NumeroAttribue.bulkCreate(numeroAttribueEntries);
+
+      const fichierUrl = file ? `/uploads/${file.filename}` : null;
+
+      await HistoriqueAttribution.create({
+        attribution_id: attribution.id,
+        reference_modification: null,
+        motif: motif || "Reclamation de l'attribution",
+        utilisateur_id: req.user.id,
+        type_modification: "reclamation",
+        date_debut: dateDebut,
+        duree_suspension: dureeSuspension,
+        date_fin_suspension: dateFinSuspension,
+        appliquee: false,
+        fichier: fichierUrl
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: "Attribution reclamer avec succès",
         attribution
       });
     } catch (error) {
@@ -419,8 +669,7 @@ class AttributionNumeroController {
       // Recherche des attributions pour ce PNN avec état autorisation true
       const attributions = await AttributionNumero.findAll({
         where: {
-          pnn_id,
-          etat_autorisation: true // Filtrer uniquement les attributions autorisées
+          pnn_id
         },
         attributes: ["id"] // On récupère l'id de l'attribution
       });
@@ -439,7 +688,9 @@ class AttributionNumeroController {
           attribution_id: {
             [Op.in]: attributionIds // Rechercher les numéros attribués pour ces attributions
           },
-          statut: "attribue"
+          statut: {
+            [Op.ne]: "libre" // Vérifier que le statut est différent de "libre"
+          }
         },
         attributes: ["numero_attribue"] // On récupère seulement les numéros attribués
       });
@@ -565,7 +816,8 @@ class AttributionNumeroController {
         date_expiration: dateExpiration, // Peut être `null` si category_id = 1
         duree_utilisation: categoryId === 1 ? null : duree_utilisation,
         etat_autorisation: true,
-        fichier: `/uploads/${file.filename}`
+        fichier: `/uploads/${file.filename}`,
+        type_decision: "attribution"
       });
 
       // Réponse si l'attribution et la décision ont été bien mises à jour
@@ -825,46 +1077,45 @@ class AttributionNumeroController {
       return res.status(500).json({ message: "Erreur interne du serveur." });
     }
   }
+  
 
   static async getAttributionDecisions(req, res) {
     const { id } = req.params; // Récupérer l'id depuis les paramètres de la route
-  
+
     // Vérifier si l'attributionId est défini
     if (!id) {
       return res.status(400).json({
         success: false,
-        message: "L'identifiant de l'attribution est requis.",
+        message: "L'identifiant de l'attribution est requis."
       });
     }
-  
+
     try {
       const decisions = await AttributionDecision.findAll({
-        where: { attribution_id: id }, // Utiliser 'id' ici
+        where: { attribution_id: id } // Utiliser 'id' ici
       });
-  
+
       // Vérifier si des décisions existent
       if (decisions.length === 0) {
         return res.status(404).json({
           success: false,
-          message: "Aucune décision trouvée pour cette attribution.",
+          message: "Aucune décision trouvée pour cette attribution."
         });
       }
-  
+
       // Retourner les décisions sous forme de JSON
       return res.status(200).json({
         success: true,
-        data: decisions.map((decision) => decision.toJSON()), // Convertir chaque instance en JSON
+        data: decisions.map((decision) => decision.toJSON()) // Convertir chaque instance en JSON
       });
     } catch (error) {
       console.error("Erreur lors de la récupération des décisions :", error);
       return res.status(500).json({
         success: false,
-        message: "Erreur lors de la récupération des décisions.",
+        message: "Erreur lors de la récupération des décisions."
       });
     }
   }
-  
-  
 }
 
 module.exports = AttributionNumeroController;

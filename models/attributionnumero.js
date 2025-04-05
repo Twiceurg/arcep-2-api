@@ -67,6 +67,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true
       },
+      regle: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
       date_attribution: {
         type: DataTypes.DATEONLY,
         allowNull: true

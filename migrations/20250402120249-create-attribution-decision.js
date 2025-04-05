@@ -31,6 +31,10 @@ module.exports = {
         type: Sequelize.DATEONLY,
         allowNull: false,
       },
+      type_decision: {
+        type: Sequelize.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation"),
+        allowNull: false,
+      },
       date_expiration: {
         type: Sequelize.DATEONLY,
         allowNull: true,

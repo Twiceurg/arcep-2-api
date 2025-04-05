@@ -65,13 +65,17 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true
       },
+      regle: {
+        type: Sequelize.STRING,
+        allowNull: true
+      },
       reference_decision: {
         type: Sequelize.STRING,
         allowNull: true
       },
       date_attribution: {
         type: Sequelize.DATEONLY,
-        allowNull: false,       
+        allowNull: false
       },
       date_expiration: {
         type: Sequelize.DATEONLY,

@@ -42,6 +42,10 @@ module.exports = (sequelize, DataTypes) => {
       type: DataTypes.DATE,
       allowNull: true
     },
+    type_decision: {
+      type: DataTypes.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation"),
+      allowNull: false
+    },
     fichier: {
       type: DataTypes.STRING,
       allowNull: true,

@@ -51,7 +51,7 @@ const login = async (req, res) => {
         role: utilisateur.role
       },
       process.env.JWT_SECRET,
-      { expiresIn: "1h" }
+      { expiresIn: "5h" }
     );
 
     // Création de l'historique de la connexion

@@ -82,8 +82,22 @@ router.get(
 );
 router.get("/attribution", AttributionNumeroController.getAllAttributions);
 router.get("/attribution/:id", AttributionNumeroController.getAttributionById);
-router.get("/attribution/:id/decisions", AttributionNumeroController.getAttributionDecisions);
-router.put("/attribution/:id", AttributionNumeroController.updateAttribution);
+router.get(
+  "/attribution/:id/decisions",
+  AttributionNumeroController.getAttributionDecisions
+);
+router.put(
+  "/attribution/:id",
+  upload.single("file"),
+  authenticateToken,
+  AttributionNumeroController.updateAttribution
+);
+router.put(
+  "/attribution/reclamation/:id",
+  upload.single("file"),
+  authenticateToken,
+  AttributionNumeroController.reclamerAttribution
+);
 router.post(
   "/attribution/suspension",
   authenticateToken,
@@ -138,7 +152,11 @@ router.get(
 );
 
 // 🔹 Route pour créer un renouvellement
-router.post("/renouvellements", RenouvellementController.createRenouvellement);
+router.post(
+  "/renouvellements",
+  upload.single("fichier"),
+  RenouvellementController.renewAttribution
+);
 router.get("/renouvellements", RenouvellementController.getAllRenouvellements);
 router.get(
   "/renouvellements/:id",
@@ -167,6 +185,12 @@ router.post(
   authenticateToken,
   upload.single("fichier"),
   historiqueAttributionController.appliquerSuspension
+);
+router.post(
+  "/historique/retrait",
+  authenticateToken,
+  upload.single("fichier"),
+  historiqueAttributionController.appliquerRetrait
 );
 router.put(
   "/historique/assign-reference/:id",
