@@ -7,9 +7,12 @@ module.exports = (sequelize, DataTypes) => {
      * This method is not a part of Sequelize lifecycle.
      * The `models/index` file will call this method automatically.
      */
-    static associate(models) { 
+    static associate(models) {
       Renouvellement.belongsTo(models.AttributionNumero, {
-        foreignKey: 'attribution_id',
+        foreignKey: "attribution_id"
+      });
+      Renouvellement.belongsTo(models.AttributionDecision, {
+        foreignKey: "decision_id"
       });
     }
   }
@@ -24,6 +27,16 @@ module.exports = (sequelize, DataTypes) => {
         },
         onUpdate: "CASCADE",
         onDelete: "CASCADE"
+      },
+      decision_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: "AttributionDecisions",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
       },
       decision_renouvellement: {
         type: DataTypes.STRING,

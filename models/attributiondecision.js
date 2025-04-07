@@ -14,6 +14,9 @@ module.exports = (sequelize, DataTypes) => {
       AttributionDecision.belongsTo(models.AttributionNumero, {
         foreignKey: 'attribution_id',
       });
+      AttributionDecision.hasMany(models.Renouvellement, {
+        foreignKey: 'decision_id', 
+      });
     }
   }
   AttributionDecision.init({
@@ -43,7 +46,7 @@ module.exports = (sequelize, DataTypes) => {
       allowNull: true
     },
     type_decision: {
-      type: DataTypes.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation"),
+      type: DataTypes.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation","renouvellement"),
       allowNull: false
     },
     fichier: {

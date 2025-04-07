@@ -31,6 +31,16 @@ module.exports = {
         type: Sequelize.DATEONLY,
         allowNull: false,  
       },
+      decision_id: {   
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "AttributionDecisions", 
+          key: "id",  
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL",   
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,

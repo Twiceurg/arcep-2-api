@@ -140,24 +140,20 @@ class AttributionNumeroController {
 
       const whereConditions = {};
 
-      // Filtrer par type d'utilisation si spécifié
       if (utilisationId) {
         whereConditions.utilisation_id = utilisationId;
       }
 
-      // Filtrer par service si spécifié
       if (serviceId) {
-        whereConditions["service_id"] = serviceId; // On filtre les attributions par ServiceId ici
+        whereConditions["service_id"] = serviceId;
       }
 
-      // Inclure les modèles liés
       const attributions = await AttributionNumero.findAll({
         where: whereConditions,
         include: [
           { model: Client },
           {
             model: AttributionDecision,
-            limit: 1,
             order: [["created_at", "DESC"]]
           },
           {
@@ -170,22 +166,73 @@ class AttributionNumeroController {
             include: [{ model: Utilisation }]
           },
           { model: NumeroAttribue },
-          { model: Rapport },
-          {
-            model: Renouvellement,
-            limit: 1,
-            order: [["date_renouvellement", "DESC"]]
-          }
+          { model: Rapport }
         ]
       });
 
-      // Filtrer les attributions par ID de service si `serviceId` est spécifié
-      let filteredAttributions = attributions;
+      // 🔁 Fonction métier pour trouver la décision pertinente
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+
+        // Trier les décisions par date de création décroissante
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        // Vérifier s'il y a une décision de retrait
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        // Vérifier si une suspension est active
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        ) {
+          return suspension; // Si la suspension est active, on retourne la suspension
+        }
+
+        // Vérifier si une décision de modification ou réclamation existe après un renouvellement
+        const modifOrRecla = sorted.find(
+          (d) =>
+            (d.type_decision === "modification" ||
+              d.type_decision === "reclamation") &&
+            new Date(d.created_at) > new Date(sorted[0].created_at) // Vérifie que la modification/reclamation est plus récente que le renouvellement
+        );
+        if (modifOrRecla) {
+          return modifOrRecla; // Retourner la modification ou réclamation la plus récente
+        }
+
+        // Vérifier si une décision de renouvellement existe
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) {
+          return renouvellement; // Retourner le renouvellement
+        }
+
+        // Retourner la première attribution si aucune autre décision n'est pertinente
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
+      // ➕ Ajout de la décision pertinente à chaque attribution
+      let filteredAttributions = attributions.map((attr) => {
+        const attrPlain = attr.get({ plain: true });
+        const decisionPertinente = getDecisionPertinente(
+          attrPlain.AttributionDecisions
+        );
+        return {
+          ...attrPlain,
+          decision_pertinente: decisionPertinente
+        };
+      });
 
       if (serviceId) {
         filteredAttributions = filteredAttributions.filter(
           (attr) => attr.Service && attr.Service.id === parseInt(serviceId)
-        ); // Vérification de l'ID du service
+        );
       }
 
       if (utilisationId) {
@@ -197,32 +244,27 @@ class AttributionNumeroController {
         );
       }
 
-      // Filtrer les attributions qui ont une catégorie différente de 1
       filteredAttributions = filteredAttributions.filter(
         (attr) => attr.Service && attr.Service.Category.id !== 1
       );
 
-      // Filtrer ceux qui ont déjà été renouvelés si `renouveler=true`
       if (renouveler === "true") {
         filteredAttributions = filteredAttributions.filter(
-          (attr) => attr.Renouvellements && attr.Renouvellements.length > 0
+          (attr) => attr.decision_pertinente?.type_decision === "renouvellement"
         );
       }
 
-      // Filtrer les attributions expirées ou non expirées selon `expirer`
       if (expirer === "true") {
         filteredAttributions = filteredAttributions.filter(
           (attr) =>
-            !attr.AttributionDecisions?.[0]?.date_expiration ||
-            new Date(attr.AttributionDecisions?.[0]?.date_expiration) <
-              new Date() // Expirées
+            !attr.decision_pertinente?.date_expiration ||
+            new Date(attr.decision_pertinente.date_expiration) < new Date()
         );
       } else if (expirer === "false") {
         filteredAttributions = filteredAttributions.filter(
           (attr) =>
-            attr.AttributionDecisions?.[0]?.date_expiration &&
-            new Date(attr.AttributionDecisions?.[0]?.date_expiration) >
-              new Date() // Non expirées
+            attr.decision_pertinente?.date_expiration &&
+            new Date(attr.decision_pertinente.date_expiration) > new Date()
         );
       }
 
@@ -495,7 +537,7 @@ class AttributionNumeroController {
         service_id,
         pnn_id,
         client_id,
-        numero_attribue, 
+        numero_attribue,
         regle,
         utilisation_id,
         motif // ✅ Ajout du motif
@@ -1077,7 +1119,6 @@ class AttributionNumeroController {
       return res.status(500).json({ message: "Erreur interne du serveur." });
     }
   }
-  
 
   static async getAttributionDecisions(req, res) {
     const { id } = req.params; // Récupérer l'id depuis les paramètres de la route

@@ -1,4 +1,10 @@
-const { Renouvellement, AttributionNumero,Service,Category,AttributionDecision } = require("../../models");
+const {
+  Renouvellement,
+  AttributionNumero,
+  Service,
+  Category,
+  AttributionDecision
+} = require("../../models");
 
 const RenouvellementController = {
   // 🔹 Créer un renouvellement
@@ -71,8 +77,8 @@ const RenouvellementController = {
 
   async renewAttribution(req, res) {
     try {
-      // const { attribution_id } = req.params;
-      const {attribution_id, decision_renouvellement, date_attribution } = req.body;
+      const { attribution_id, decision_renouvellement, date_attribution } =
+        req.body;
       const file = req.file;
 
       const attribution = await AttributionNumero.findByPk(attribution_id, {
@@ -137,7 +143,7 @@ const RenouvellementController = {
       // ✅ Créer la décision de renouvellement
       const renouvellementDecision = await AttributionDecision.create({
         attribution_id: attribution.id,
-        reference_decision:decision_renouvellement,
+        reference_decision: decision_renouvellement,
         date_attribution: attributionDate,
         date_expiration: dateExpiration,
         duree_utilisation, // même durée que la décision initiale
@@ -146,16 +152,27 @@ const RenouvellementController = {
         type_decision: "renouvellement"
       });
 
+      // ✅ Enregistrer le renouvellement dans la table Renouvellement
+      const renouvellement = await Renouvellement.create({
+        attribution_id: attribution.id,
+        decision_id: renouvellementDecision.id, // Assurez-vous que cette colonne existe
+        decision_renouvellement: decision_renouvellement,
+        date_renouvellement: attributionDate,
+        date_expiration_renouvellement: dateExpiration
+      });
+
       return res.status(200).json({
         success: true,
         message: "Renouvellement effectué avec succès",
-        renouvellementDecision
+        renouvellementDecision,
+        renouvellement // Ajouter aussi l'enregistrement du renouvellement dans la réponse
       });
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur interne du serveur" });
     }
   },
+
   // 🔹 Obtenir tous les renouvellements
   async getAllRenouvellements(req, res) {
     try {
