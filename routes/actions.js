@@ -120,6 +120,11 @@ router.put(
   upload.single("file"),
   AttributionNumeroController.assignReference
 );
+router.put(
+  "/attribution/:id/reservation",
+  upload.single("file"),
+  AttributionNumeroController.assignReferenceDeReclamtion
+);
 
 // 📌 Route pour créer une nouvelle utilisation
 router.post("/utilisations", utilisationController.create);
@@ -191,6 +196,12 @@ router.post(
   authenticateToken,
   upload.single("fichier"),
   historiqueAttributionController.appliquerRetrait
+);
+router.post(
+  "/historique/resiliation",
+  authenticateToken,
+  upload.single("fichier"),
+  historiqueAttributionController.appliquerRésiliation
 );
 router.put(
   "/historique/assign-reference/:id",

@@ -12,6 +12,7 @@ module.exports = (sequelize, DataTypes) => {
       NumeroAttribue.belongsTo(models.AttributionNumero, {
         foreignKey: "attribution_id"
       });
+      NumeroAttribue.belongsTo(models.Pnn, { foreignKey: "pnn_id" });
     }
   }
   NumeroAttribue.init(
@@ -25,8 +26,18 @@ module.exports = (sequelize, DataTypes) => {
         },
         onDelete: "CASCADE"
       },
+      pnn_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
       statut: {
-        type: DataTypes.ENUM("libre", "attribue", "suspendu", "retiré"),
+        type: DataTypes.ENUM(
+          "libre",
+          "attribue",
+          "suspendu",
+          "retiré",
+          "résiliation"
+        ),
         defaultValue: "attribue"
       },
       numero_attribue: {

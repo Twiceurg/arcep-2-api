@@ -16,6 +16,9 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "pnn_id",
         as: "attributions"
       });
+      Pnn.hasMany(models.NumeroAttribue, {
+        foreignKey: "pnn_id"
+      });
       Pnn.belongsTo(models.Category, { foreignKey: "category_id" });
       Pnn.belongsTo(models.Utilisation, { foreignKey: "utilisation_id" });
     }

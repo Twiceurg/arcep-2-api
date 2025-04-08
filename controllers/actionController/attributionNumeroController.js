@@ -113,6 +113,7 @@ class AttributionNumeroController {
       const numeroAttribueEntries = numero_attribue.map((numero) => ({
         attribution_id: attribution.id,
         numero_attribue: numero,
+        pnn_id: pnn_id,
         created_at: new Date(),
         updated_at: new Date()
       }));
@@ -179,39 +180,40 @@ class AttributionNumeroController {
           (a, b) => new Date(b.created_at) - new Date(a.created_at)
         );
 
-        // Vérifier s'il y a une décision de retrait
+        // 1. Résiliation (si présente)
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
+        if (resiliation) return resiliation;
+
+        // 2. Retrait
         const retrait = sorted.find((d) => d.type_decision === "retrait");
         if (retrait) return retrait;
 
-        // Vérifier si une suspension est active
+        // 3. Suspension active
         const suspension = sorted.find((d) => d.type_decision === "suspension");
         if (
           suspension?.date_expiration &&
           new Date() < new Date(suspension.date_expiration)
         ) {
-          return suspension; // Si la suspension est active, on retourne la suspension
+          return suspension;
         }
 
-        // Vérifier si une décision de modification ou réclamation existe après un renouvellement
+        // 4. La plus récente entre modification et réclamation
         const modifOrRecla = sorted.find(
           (d) =>
-            (d.type_decision === "modification" ||
-              d.type_decision === "reclamation") &&
-            new Date(d.created_at) > new Date(sorted[0].created_at) // Vérifie que la modification/reclamation est plus récente que le renouvellement
+            d.type_decision === "modification" ||
+            d.type_decision === "reclamation"
         );
-        if (modifOrRecla) {
-          return modifOrRecla; // Retourner la modification ou réclamation la plus récente
-        }
+        if (modifOrRecla) return modifOrRecla;
 
-        // Vérifier si une décision de renouvellement existe
+        // 5. Renouvellement
         const renouvellement = sorted.find(
           (d) => d.type_decision === "renouvellement"
         );
-        if (renouvellement) {
-          return renouvellement; // Retourner le renouvellement
-        }
+        if (renouvellement) return renouvellement;
 
-        // Retourner la première attribution si aucune autre décision n'est pertinente
+        // 6. Attribution (par défaut)
         return (
           sorted.find((d) => d.type_decision === "attribution") || sorted[0]
         );
@@ -311,17 +313,71 @@ class AttributionNumeroController {
             include: [{ model: Utilisation }]
           },
           { model: NumeroAttribue },
-          { model: Rapport },
-          {
-            model: Renouvellement,
-            limit: 1,
-            order: [["date_renouvellement", "DESC"]]
-          }
+          { model: Rapport }
         ]
       });
 
-      // Filtrer les attributions par ID de service si `serviceId` est spécifié
-      let filteredAttributions = attributions;
+      // 🔁 Fonction métier pour trouver la décision pertinente
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+
+        // Trier les décisions par date de création décroissante
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        // Vérifier s'il y a une décision de retrait
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        // Vérifier si une suspension est active
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        ) {
+          return suspension; // Si la suspension est active, on retourne la suspension
+        }
+
+        // Vérifier si une décision de modification ou réclamation existe après un renouvellement
+        const modifOrRecla = sorted.find(
+          (d) =>
+            (d.type_decision === "modification" ||
+              d.type_decision === "reclamation") &&
+            new Date(d.created_at) > new Date(sorted[0].created_at) // Vérifie que la modification/reclamation est plus récente que le renouvellement
+        );
+        if (modifOrRecla) {
+          return modifOrRecla; // Retourner la modification ou réclamation la plus récente
+        }
+
+        // Vérifier si une décision de renouvellement existe
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) {
+          return renouvellement; // Retourner le renouvellement
+        }
+
+        // Retourner la première attribution si aucune autre décision n'est pertinente
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
+      // ➕ Ajout de la décision pertinente à chaque attribution
+      let filteredAttributions = attributions.map((attr) => {
+        const attrPlain = attr.get({ plain: true });
+        const decisionPertinente = getDecisionPertinente(
+          attrPlain.AttributionDecisions
+        );
+        return {
+          ...attrPlain,
+          decision_pertinente: decisionPertinente
+        };
+      });
+
+      // // Filtrer les attributions par ID de service si `serviceId` est spécifié
+      // let filteredAttributions = attributions;
 
       if (serviceId) {
         filteredAttributions = filteredAttributions.filter(
@@ -381,31 +437,9 @@ class AttributionNumeroController {
   static async updateAttribution(req, res) {
     try {
       const { id } = req.params;
-      const {
-        type_utilisation_id,
-        service_id,
-        pnn_id,
-        client_id,
-        numero_attribue,
-        reference_decision,
-        regle,
-        utilisation_id,
-        motif // ✅ Ajout du motif
-      } = req.body;
+      const { type_utilisation_id, motif } = req.body;
 
       const file = req.file; // ✅ Récupération du fichier
-
-      if (
-        !numero_attribue ||
-        !Array.isArray(numero_attribue) ||
-        numero_attribue.length === 0
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Le tableau des numéros attribués est requis et doit être un tableau non vide"
-        });
-      }
 
       // Vérifier si l'attribution existe
       const attribution = await AttributionNumero.findByPk(id, {
@@ -423,84 +457,10 @@ class AttributionNumeroController {
       const dateFinSuspension = new Date(dateDebut);
       dateFinSuspension.setMonth(dateDebut.getMonth() + dureeSuspension);
 
-      // Vérifier si le PNN existe
-      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
-      if (!pnn) {
-        return res
-          .status(404)
-          .json({ success: false, message: "PNN introuvable" });
-      }
-      console.log("PNN:", pnn);
-      console.log("Bloc Min:", pnn.bloc_min);
-      console.log("Bloc Max:", pnn.block_max);
-      // Vérifier que chaque numéro est valide
-      for (const numero of numero_attribue) {
-        if (numero < pnn.bloc_min || numero > pnn.block_max) {
-          return res.status(400).json({
-            success: false,
-            message: `Le numéro ${numero} est en dehors de la plage autorisée`
-          });
-        }
-      }
-
-      // Vérifier si un numéro appartient déjà à l'attribution actuelle
-      const existingNumbers = await NumeroAttribue.findAll({
-        where: { numero_attribue: { [Op.in]: numero_attribue } }
-      });
-
-      // Liste des numéros déjà attribués à cette attribution
-      const existingAssignedNumbers = existingNumbers.filter(
-        (num) => num.attribution_id === attribution.id
-      );
-
-      // Liste des nouveaux numéros
-      const numbersToAdd = numero_attribue.filter(
-        (numero) =>
-          !existingAssignedNumbers
-            .map((num) => num.numero_attribue)
-            .includes(numero)
-      );
-
-      // Vérifier si les nouveaux numéros sont déjà attribués ailleurs
-      const conflictNumbers = existingNumbers
-        .filter((num) => num.attribution_id !== attribution.id)
-        .map((num) => num.numero_attribue);
-
-      if (conflictNumbers.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
-            ", "
-          )}`
-        });
-      }
-
       // Mise à jour de l'attribution
       attribution.type_utilisation_id = type_utilisation_id;
-      attribution.service_id = service_id;
-      attribution.pnn_id = pnn_id;
-      attribution.client_id = client_id;
-      attribution.regle = regle;
-      attribution.utilisation_id = utilisation_id;
+
       await attribution.save();
-
-      // Supprimer les anciens numéros non utilisés
-      await NumeroAttribue.destroy({
-        where: {
-          attribution_id: attribution.id,
-          numero_attribue: { [Op.notIn]: numero_attribue }
-        }
-      });
-
-      // Ajouter les nouveaux numéros attribués
-      const numeroAttribueEntries = numbersToAdd.map((numero) => ({
-        attribution_id: attribution.id,
-        numero_attribue: numero,
-        created_at: new Date(),
-        updated_at: new Date()
-      }));
-
-      await NumeroAttribue.bulkCreate(numeroAttribueEntries);
 
       const fichierUrl = file ? `/uploads/${file.filename}` : null;
 
@@ -866,6 +826,107 @@ class AttributionNumeroController {
       return res.status(200).json({
         success: true,
         message: "Référence assignée et attribution mise à jour avec succès",
+        attributionDecision
+      });
+    } catch (error) {
+      console.error(error);
+      return res.status(500).json({ message: "Erreur interne du serveur" });
+    }
+  }
+
+  static async assignReferenceDeReclamtion(req, res) {
+    try {
+      const { id } = req.params;
+      const { reference_decision, date_attribution, duree_utilisation } =
+        req.body;
+      const file = req.file;
+
+      if (!file) {
+        return res.status(400).json({ message: "Le fichier est requis" });
+      }
+
+      // Vérifier si l'attribution existe avec son service
+      const attribution = await AttributionNumero.findByPk(id, {
+        include: [{ model: Service, include: [{ model: Category }] }]
+      });
+
+      if (!attribution) {
+        return res.status(404).json({ message: "Attribution non trouvée" });
+      }
+
+      // Vérifier si le service associé a category_id = 1
+      const categoryId =
+        attribution.Service && attribution.Service.Category
+          ? attribution.Service.Category.id
+          : null;
+
+      console.log("Category ID:", categoryId);
+
+      // Vérifier si la référence est fournie
+      if (!reference_decision) {
+        return res.status(400).json({ message: "La référence est requise" });
+      }
+
+      // Vérifier si la date d'attribution est fournie
+      const attributionDate = date_attribution
+        ? new Date(date_attribution)
+        : new Date();
+
+      let dateExpiration = null; // On ne définit pas la date d'expiration par défaut
+
+      if (categoryId !== 1) {
+        // Si la catégorie N'EST PAS 1, on prend en compte la durée
+        const match = duree_utilisation
+          ? duree_utilisation.match(/^(\d+)\s*(mois|ans)$/i)
+          : null;
+
+        if (!match) {
+          return res.status(400).json({
+            message:
+              "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
+          });
+        }
+
+        const duree = parseInt(match[1], 10);
+        const unite = match[2].toLowerCase();
+        let dureeEnMois = duree;
+
+        if (unite === "ans") {
+          dureeEnMois *= 12; // Convertir en mois si c'est en années
+        }
+
+        // Calcul de la date d'expiration
+        dateExpiration = new Date(attributionDate);
+        dateExpiration.setMonth(dateExpiration.getMonth() + dureeEnMois);
+      }
+
+      const numeroAttribue = await NumeroAttribue.findOne({
+        where: { attribution_id: attribution.id }
+      });
+
+      if (!numeroAttribue) {
+        return res.status(404).json({ message: "Numéro attribué non trouvé" });
+      }
+
+      numeroAttribue.statut = "reservation";
+      await numeroAttribue.save();
+
+      // Création de la décision d'attribution
+      const attributionDecision = await AttributionDecision.create({
+        attribution_id: attribution.id, // L'ID de l'attribution
+        reference_decision, // La référence
+        date_attribution: attributionDate,
+        date_expiration: dateExpiration, // Peut être `null` si category_id = 1
+        duree_utilisation: categoryId === 1 ? null : duree_utilisation,
+        etat_autorisation: true,
+        fichier: `/uploads/${file.filename}`,
+        type_decision: "reservation"
+      });
+
+      // Réponse si l'attribution et la décision ont été bien mises à jour
+      return res.status(200).json({
+        success: true,
+        message: "Référence assignée et reservation effectuer avec succès",
         attributionDecision
       });
     } catch (error) {

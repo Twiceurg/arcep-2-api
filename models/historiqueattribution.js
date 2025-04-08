@@ -47,7 +47,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false
       },
       type_modification: {
-        type: DataTypes.ENUM("modification", "reclamation", "suspension"),
+        type: DataTypes.ENUM("modification", "reclamation", "suspension","résiliation"),
         allowNull: false
       },
       fichier: {
