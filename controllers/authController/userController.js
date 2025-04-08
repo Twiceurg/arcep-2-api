@@ -291,6 +291,35 @@ const resetPassword = async (req, res) => {
   }
 };
 
+const getUserDetails = async (req, res) => {
+  try {
+    // Récupérer l'ID de l'utilisateur depuis req.user (défini par le middleware)
+    const utilisateurId = req.user.id;
+
+    // Récupérer l'utilisateur à partir de la base de données
+    const utilisateur = await Utilisateur.findByPk(utilisateurId);
+
+    if (!utilisateur) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouvé."
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      message: "Détails de l'utilisateur récupérés avec succès.",
+      data: utilisateur
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur lors de la récupération des détails de l'utilisateur."
+    });
+  }
+};
+
 module.exports = {
   getAllUsers,
   updateUser,
@@ -298,5 +327,6 @@ module.exports = {
   createUser,
   toggleUserStatus,
   changerMotDePasse,
-  resetPassword
+  resetPassword,
+  getUserDetails
 };

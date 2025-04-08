@@ -2,6 +2,7 @@ const express = require("express");
 const app = express();
 const port = 3008;
 const cors = require("cors"); 
+const path = require('path');
 
 // Configuration de CORS
 const corsOptions = {
@@ -10,6 +11,11 @@ const corsOptions = {
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true,
 };
+require('./cron/expirationCron');
+
+// Utiliser express.static pour servir des fichiers statiques depuis un dossier 'uploads'
+app.use('/uploads', express.static(path.join(__dirname, 'utils', 'uploads')));
+
 
 
 app.use(cors(corsOptions));

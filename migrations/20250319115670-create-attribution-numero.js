@@ -62,7 +62,11 @@ module.exports = {
         onDelete: "SET NULL"
       },
       duree_utilisation: {
-        type: Sequelize.INTEGER,
+        type: Sequelize.STRING,
+        allowNull: true
+      },
+      regle: {
+        type: Sequelize.STRING,
         allowNull: true
       },
       reference_decision: {
@@ -70,12 +74,11 @@ module.exports = {
         allowNull: true
       },
       date_attribution: {
-        type: Sequelize.DATE,
-        allowNull: false,
-        defaultValue: Sequelize.literal("CURRENT_TIMESTAMP")
+        type: Sequelize.DATEONLY,
+        allowNull: false
       },
       date_expiration: {
-        type: Sequelize.DATE,
+        type: Sequelize.DATEONLY,
         allowNull: true
       },
       etat_autorisation: {

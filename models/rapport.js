@@ -1,0 +1,105 @@
+"use strict";
+const { Model } = require("sequelize");
+module.exports = (sequelize, DataTypes) => {
+  class Rapport extends Model {
+    /**
+     * Helper method for defining associations.
+     * This method is not a part of Sequelize lifecycle.
+     * The `models/index` file will call this method automatically.
+     */
+    static associate(models) {
+      // define association here
+      Rapport.belongsTo(models.AttributionNumero, {
+        foreignKey: "attribution_id", 
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE"
+      });
+    }
+  }
+  Rapport.init(
+    {
+      attribution_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      ref: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      creation_date: {
+        type: DataTypes.DATEONLY,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      },
+      revision: {
+        type: DataTypes.STRING,
+        allowNull: false,
+        defaultValue: "00"
+      },
+      ticket: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      demandeur: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      type_numeros: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      type_utilisation: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      quantite: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        defaultValue: 1
+      },
+      type_service: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      condition_tarifaire: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      utilisation_envisagee: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      preference_demandeur: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      analyse_demande: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      conclusion: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      created_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      },
+      updated_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      }
+    },
+    {
+      sequelize,
+      modelName: "Rapport",
+      tableName: "Rapports", // S'assurer que le nom de la table est bien au pluriel
+      timestamps: true,
+      createdAt: "created_at",
+      updatedAt: "updated_at"
+    }
+  );
+  return Rapport;
+};

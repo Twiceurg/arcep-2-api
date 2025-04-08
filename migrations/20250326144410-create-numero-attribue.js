@@ -22,6 +22,21 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: false
       },
+      pnn_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Pnns",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
+      },
+      statut: {
+        type: Sequelize.ENUM('libre', 'attribue','suspendu','retiré','résiliation','reservation'),
+        defaultValue: 'libre',
+        allowNull: false
+      },
       created_at: {
         allowNull: false,
         type: Sequelize.DATE,
