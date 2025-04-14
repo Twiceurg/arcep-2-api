@@ -1,4 +1,5 @@
-const { TypeUtilisation } = require("../../models");
+const { TypeUtilisation, Notification, Utilisateur } = require("../../models");
+const { getIo } = require("../../utils/socket");
 
 class TypeUtilisationController {
   // 📌 Créer un type d'utilisation
@@ -7,24 +8,43 @@ class TypeUtilisationController {
       const { libele_type } = req.body;
 
       if (!libele_type || libele_type.trim() === "") {
-        return res
-          .status(400)
-          .json({ success: false, message: "Le libellé est requis" });
+        return res.status(400).json({
+          success: false,
+          message: "Le libellé est requis"
+        });
       }
 
       const existingType = await TypeUtilisation.findOne({
         where: { libele_type }
       });
+
       if (existingType) {
-        return res
-          .status(409)
-          .json({
-            success: false,
-            message: "Ce type d'utilisation existe déjà"
-          });
+        return res.status(409).json({
+          success: false,
+          message: "Ce type d'utilisation existe déjà"
+        });
       }
 
       const typeUtilisation = await TypeUtilisation.create({ libele_type });
+
+      const message = `Un nouveau type d'utilisation a été créé : ${libele_type}`;
+      const utilisateurs = await Utilisateur.findAll();
+
+      for (let utilisateur of utilisateurs) {
+        await Notification.create({
+          message,
+          user_id: utilisateur.id,
+          type: "type_utilisation_creation",
+          read: false
+        });
+      }
+
+      const io = getIo(); // <--- ici on récupère io
+
+      io.emit("notification", {
+        message,
+        type: "type_utilisation_creation"
+      });
 
       return res.status(201).json({
         success: true,
@@ -33,9 +53,10 @@ class TypeUtilisationController {
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
-        .json({ success: false, message: "Erreur interne du serveur" });
+      return res.status(500).json({
+        success: false,
+        message: "Erreur interne du serveur"
+      });
     }
   }
 
@@ -120,12 +141,10 @@ class TypeUtilisationController {
       }
 
       await typeUtilisation.destroy();
-      return res
-        .status(200)
-        .json({
-          success: true,
-          message: "Type d'utilisation supprimé avec succès"
-        });
+      return res.status(200).json({
+        success: true,
+        message: "Type d'utilisation supprimé avec succès"
+      });
     } catch (error) {
       console.error(error);
       return res

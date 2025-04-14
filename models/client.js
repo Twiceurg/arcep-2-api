@@ -38,6 +38,10 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.STRING,
         allowNull: true
       },
+      activite: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
       adresse_representant_legal: {
         type: DataTypes.STRING,
         allowNull: true

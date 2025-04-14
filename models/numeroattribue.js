@@ -13,6 +13,9 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "attribution_id"
       });
       NumeroAttribue.belongsTo(models.Pnn, { foreignKey: "pnn_id" });
+      NumeroAttribue.hasMany(models.HistoriqueAttributionNumero, {
+        foreignKey: "numero_id"
+      });
     }
   }
   NumeroAttribue.init(

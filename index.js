@@ -1,32 +1,41 @@
 const express = require("express");
+const http = require("http");
+const socketIo = require("socket.io");
 const app = express();
 const port = 3008;
-const cors = require("cors"); 
-const path = require('path');
+const cors = require("cors");
+const path = require("path");
+const { setIo } = require("./utils/socket"); // <--- import
+require("./cron/expirationCron");
+require("./cron/notification");
 
-// Configuration de CORS
-const corsOptions = {
-  origin: ["http://localhost:3000", "http://192.168.95.27:3000"], // ✅ Correct
-  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"], 
+const server = http.createServer(app);
+
+const io = socketIo(server, {
+  cors: {
+    origin: ["http://localhost:3000", "http://192.168.95.27:3000","http://192.168.95.27:3008"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+    credentials: true,
+  },
+});
+
+setIo(io); // <--- assigner l'instance ici
+
+app.use(cors({
+  origin: ["http://localhost:3000", "http://192.168.95.27:3000"],
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
   credentials: true,
-};
-require('./cron/expirationCron');
+}));
 
-// Utiliser express.static pour servir des fichiers statiques depuis un dossier 'uploads'
-app.use('/uploads', express.static(path.join(__dirname, 'utils', 'uploads')));
+app.use("/uploads", express.static(path.join(__dirname, "utils", "uploads")));
 
+app.use(express.json());
 
-
-app.use(cors(corsOptions));
-
-// Importation des routes 
 const ActionRoutes = require("./routes/actions");
 const auth = require("./routes/auth");
 
-// Configuration de express pour gérer les requêtes JSON
-app.use(express.json());
- 
 app.use("/api/auth", auth);
 app.use("/api", ActionRoutes);
 
@@ -34,6 +43,20 @@ app.get("/", (req, res) => {
   res.send("Hello, Node.js avec Express!");
 });
 
-app.listen(port, () => {
+io.on("connection", (socket) => {
+  console.log("Un utilisateur est connecté.", socket.id);
+
+  // socket.emit("notification", { message: "" });
+
+  socket.on("sendNotification", (data) => {
+    io.emit("notification", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Un utilisateur s'est déconnecté.", socket.id);
+  });
+});
+
+server.listen(port, () => {
   console.log(`Serveur lancé à http://localhost:${port}`);
 });

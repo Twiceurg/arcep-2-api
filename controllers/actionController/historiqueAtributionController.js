@@ -363,6 +363,7 @@ const historiqueAttributionController = {
       }
 
       numeroAttribue.statut = "suspendu";
+      historique.appliquee = true;
       await numeroAttribue.save();
 
       // Mise à jour de l'historique et création de la décision de suspension

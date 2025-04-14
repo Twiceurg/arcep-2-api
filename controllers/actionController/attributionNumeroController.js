@@ -10,7 +10,10 @@ const {
   HistoriqueAttribution,
   Renouvellement,
   Category,
-  Pnn
+  Pnn,
+  HistoriqueAttributionNumero,
+  Utilisateur,
+  Sequelize
 } = require("../../models");
 const { Op } = require("sequelize");
 
@@ -119,7 +122,24 @@ class AttributionNumeroController {
       }));
 
       // Insérer tous les numéros dans la table NumeroAttribue
-      await NumeroAttribue.bulkCreate(numeroAttribueEntries);
+      const numeroAttribues = await NumeroAttribue.bulkCreate(
+        numeroAttribueEntries
+      );
+
+      // Ajouter les enregistrements dans la table HistoriqueAttributionNumero
+      const historiqueEntries = numeroAttribues.map((numeroAttribue) => ({
+        attribution_id: attribution.id,
+        numero_id: numeroAttribue.id,
+        numero: numeroAttribue.numero_attribue,
+        date_attribution: new Date(),
+        motif: "Attribution initiale",
+        utilisateur_id: req.user.id,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      // Insérer les historiques dans la table HistoriqueAttributionNumero
+      await HistoriqueAttributionNumero.bulkCreate(historiqueEntries);
 
       return res.status(201).json({
         success: true,
@@ -137,7 +157,8 @@ class AttributionNumeroController {
   // 📌 Récupérer toutes les attributions
   static async getAllAttributions(req, res) {
     try {
-      const { utilisationId, serviceId, renouveler, expirer } = req.query;
+      const { utilisationId, serviceId, renouveler, expirer, mois, annee } =
+        req.query;
 
       const whereConditions = {};
 
@@ -149,13 +170,24 @@ class AttributionNumeroController {
         whereConditions["service_id"] = serviceId;
       }
 
+      // Filtre par mois et année
+      if (mois && annee) {
+        const startDate = new Date(annee, mois - 1, 1); // Le premier jour du mois
+        const endDate = new Date(annee, mois, 0); // Le dernier jour du mois
+
+        whereConditions.created_at = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      }
+
       const attributions = await AttributionNumero.findAll({
         where: whereConditions,
         include: [
           { model: Client },
           {
             model: AttributionDecision,
-            order: [["created_at", "DESC"]]
+            order: [["created_at", "ASC"]]
           },
           {
             model: Service,
@@ -279,21 +311,29 @@ class AttributionNumeroController {
 
   static async getAllAttributionsBloc(req, res) {
     try {
-      const { utilisationId, serviceId } = req.query;
+      const { utilisationId, serviceId, expirer, mois, annee } = req.query;
 
       const whereConditions = {};
 
-      // Filtrer par type d'utilisation si spécifié
       if (utilisationId) {
         whereConditions.utilisation_id = utilisationId;
       }
 
-      // Filtrer par service si spécifié
       if (serviceId) {
-        whereConditions["service_id"] = serviceId; // On filtre les attributions par ServiceId ici
+        whereConditions["service_id"] = serviceId;
       }
 
-      // Inclure les modèles liés
+      // Filtre par mois et année
+      if (mois && annee) {
+        const startDate = new Date(annee, mois - 1, 1);
+        const endDate = new Date(annee, mois, 0);
+
+        whereConditions.created_at = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      }
+
       const attributions = await AttributionNumero.findAll({
         where: whereConditions,
         include: [
@@ -301,11 +341,11 @@ class AttributionNumeroController {
           {
             model: AttributionDecision,
             limit: 1,
-            order: [["date_attribution", "DESC"]]
+            order: [["date_attribution", "ASC"]]
           },
           {
             model: Service,
-            include: [{ model: Category }] // Inclure `Category` pour pouvoir filtrer après
+            include: [{ model: Category }]
           },
           { model: TypeUtilisation },
           {
@@ -317,54 +357,42 @@ class AttributionNumeroController {
         ]
       });
 
-      // 🔁 Fonction métier pour trouver la décision pertinente
       const getDecisionPertinente = (decisions) => {
         if (!decisions || decisions.length === 0) return null;
 
-        // Trier les décisions par date de création décroissante
         const sorted = [...decisions].sort(
           (a, b) => new Date(b.created_at) - new Date(a.created_at)
         );
 
-        // Vérifier s'il y a une décision de retrait
         const retrait = sorted.find((d) => d.type_decision === "retrait");
         if (retrait) return retrait;
 
-        // Vérifier si une suspension est active
         const suspension = sorted.find((d) => d.type_decision === "suspension");
         if (
           suspension?.date_expiration &&
           new Date() < new Date(suspension.date_expiration)
         ) {
-          return suspension; // Si la suspension est active, on retourne la suspension
+          return suspension;
         }
 
-        // Vérifier si une décision de modification ou réclamation existe après un renouvellement
         const modifOrRecla = sorted.find(
           (d) =>
             (d.type_decision === "modification" ||
               d.type_decision === "reclamation") &&
-            new Date(d.created_at) > new Date(sorted[0].created_at) // Vérifie que la modification/reclamation est plus récente que le renouvellement
+            new Date(d.created_at) > new Date(sorted[0].created_at)
         );
-        if (modifOrRecla) {
-          return modifOrRecla; // Retourner la modification ou réclamation la plus récente
-        }
+        if (modifOrRecla) return modifOrRecla;
 
-        // Vérifier si une décision de renouvellement existe
         const renouvellement = sorted.find(
           (d) => d.type_decision === "renouvellement"
         );
-        if (renouvellement) {
-          return renouvellement; // Retourner le renouvellement
-        }
+        if (renouvellement) return renouvellement;
 
-        // Retourner la première attribution si aucune autre décision n'est pertinente
         return (
           sorted.find((d) => d.type_decision === "attribution") || sorted[0]
         );
       };
 
-      // ➕ Ajout de la décision pertinente à chaque attribution
       let filteredAttributions = attributions.map((attr) => {
         const attrPlain = attr.get({ plain: true });
         const decisionPertinente = getDecisionPertinente(
@@ -376,16 +404,12 @@ class AttributionNumeroController {
         };
       });
 
-      // // Filtrer les attributions par ID de service si `serviceId` est spécifié
-      // let filteredAttributions = attributions;
-
       if (serviceId) {
         filteredAttributions = filteredAttributions.filter(
           (attr) => attr.Service && attr.Service.id === parseInt(serviceId)
         );
       }
 
-      // Filtrer par type d'utilisation si spécifié
       if (utilisationId) {
         filteredAttributions = filteredAttributions.filter(
           (attr) =>
@@ -395,16 +419,151 @@ class AttributionNumeroController {
         );
       }
 
-      // Filtrer les attributions qui ont une catégorie spécifique (par exemple, catégorie 1)
       filteredAttributions = filteredAttributions.filter(
         (attr) => attr.Service && attr.Service.Category.id === 1
       );
 
-      console.log(filteredAttributions);
+      // Nouveau filtre pour les expirations
+      if (expirer === "true") {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) =>
+            !attr.decision_pertinente?.date_expiration ||
+            new Date(attr.decision_pertinente.date_expiration) < new Date()
+        );
+      } else if (expirer === "false") {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) =>
+            attr.decision_pertinente?.date_expiration &&
+            new Date(attr.decision_pertinente.date_expiration) > new Date()
+        );
+      }
+
       return res.status(200).json(filteredAttributions);
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur interne du serveur" });
+    }
+  }
+
+  static async getHistoriqueByAttributionId(req, res) {
+    try {
+      const { id } = req.params; // id de l'attribution
+
+      const historique = await HistoriqueAttribution.findAll({
+        where: { attribution_id: id },
+        order: [["created_at", "DESC"]],
+        include: [
+          {
+            model: Utilisateur
+          }
+        ]
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: historique
+      });
+    } catch (error) {
+      console.error("Erreur récupération historique:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erreur lors de la récupération de l'historique"
+      });
+    }
+  }
+
+  static async getAllHistoriques(req, res) {
+    try {
+      const historiques = await HistoriqueAttributionNumero.findAll({
+        order: [["created_at", "DESC"]],
+        include: [
+          {
+            model: AttributionNumero,
+            include: [
+              { model: Client },
+              { model: Service },
+              { model: TypeUtilisation },
+              { model: Pnn },
+              { model: Utilisation },
+              { model: NumeroAttribue },
+              { model: Rapport },
+              { model: Renouvellement },
+              { model: AttributionDecision },
+              { model: HistoriqueAttribution }
+            ]
+          },
+          {
+            model: Utilisateur
+          }
+        ]
+      });
+
+      // 🔎 Fonction pour déterminer la décision pertinente
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
+        if (resiliation) return resiliation;
+
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        ) {
+          return suspension;
+        }
+
+        const modifOrRecla = sorted.find(
+          (d) =>
+            d.type_decision === "modification" ||
+            d.type_decision === "reclamation"
+        );
+        if (modifOrRecla) return modifOrRecla;
+
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) return renouvellement;
+
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
+      // 🛠 Traitement des historiques pour ajouter la décision pertinente
+      const historiquesWithDecision = historiques.map((histo) => {
+        const histoPlain = histo.get({ plain: true });
+        const attribution = histoPlain.AttributionNumero;
+
+        if (attribution?.AttributionDecisions) {
+          const decisionPertinente = getDecisionPertinente(
+            attribution.AttributionDecisions
+          );
+          histoPlain.AttributionNumero.decision_pertinente = decisionPertinente;
+        }
+
+        return histoPlain;
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: historiquesWithDecision
+      });
+    } catch (error) {
+      console.error("Erreur lors de la récupération des historiques:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erreur lors de la récupération des historiques"
+      });
     }
   }
 
@@ -610,7 +769,23 @@ class AttributionNumeroController {
         updated_at: new Date()
       }));
 
-      await NumeroAttribue.bulkCreate(numeroAttribueEntries);
+      const numeroAttribues = await NumeroAttribue.bulkCreate(
+        numeroAttribueEntries
+      );
+
+      const historiqueEntries = numeroAttribues.map((numeroAttribue) => ({
+        attribution_id: attribution.id,
+        numero_id: numeroAttribue.id,
+        numero: numeroAttribue.numero_attribue,
+        date_attribution: new Date(),
+        motif: motif || "Reclamation de l'attribution",
+        utilisateur_id: req.user.id,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      // Insérer les historiques dans la table HistoriqueAttributionNumero
+      await HistoriqueAttributionNumero.bulkCreate(historiqueEntries);
 
       const fichierUrl = file ? `/uploads/${file.filename}` : null;
 

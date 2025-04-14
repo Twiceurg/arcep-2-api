@@ -9,6 +9,12 @@ module.exports = (sequelize, DataTypes) => {
       Utilisateur.hasMany(models.HistoriqueAttribution, {
         foreignKey: "utilisateur_id"
       });
+      Utilisateur.hasMany(models.Notification, {
+        foreignKey: "user_id"
+      });
+      Utilisateur.hasMany(models.HistoriqueAttributionNumero, {
+        foreignKey: "utilisateur_id"
+      });
     }
   }
   Utilisateur.init(

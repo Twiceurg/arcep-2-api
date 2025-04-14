@@ -11,7 +11,8 @@ class ClientController {
         fonction_representant_legal,
         adresse_representant_legal,
         telephone_morale,
-        email_morale
+        email_morale,
+        activite
       } = req.body;
 
       // Vérifier si le client existe déjà (via l'email ou la dénomination)
@@ -33,7 +34,8 @@ class ClientController {
         fonction_representant_legal,
         adresse_representant_legal,
         telephone_morale,
-        email_morale
+        email_morale,
+        activite
       });
 
       return res.status(201).json({
@@ -102,7 +104,8 @@ class ClientController {
         fonction_representant_legal,
         adresse_representant_legal,
         telephone_morale,
-        email_morale
+        email_morale,
+        activite
       } = req.body;
  
       const client = await Client.findByPk(id);
@@ -117,6 +120,7 @@ class ClientController {
       client.adresse_representant_legal = adresse_representant_legal;
       client.telephone_morale = telephone_morale;
       client.email_morale = email_morale;
+      client.activite = activite;
 
       await client.save();
 

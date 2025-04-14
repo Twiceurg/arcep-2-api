@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class AttributionDecision extends Model {
     /**
@@ -12,60 +10,76 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       // define association here
       AttributionDecision.belongsTo(models.AttributionNumero, {
-        foreignKey: 'attribution_id',
+        foreignKey: "attribution_id"
       });
       AttributionDecision.hasMany(models.Renouvellement, {
-        foreignKey: 'decision_id', 
+        foreignKey: "decision_id"
       });
     }
   }
-  AttributionDecision.init({
-    attribution_id: {
-      type: DataTypes.INTEGER,
-      allowNull: false,
-      references: {
-        model: 'Attributions', // Le nom de la table de l'attribution
-        key: 'id'
+  AttributionDecision.init(
+    {
+      attribution_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false,
+        references: {
+          model: "Attributions", // Le nom de la table de l'attribution
+          key: "id"
+        },
+        onDelete: "CASCADE"
       },
-      onDelete: 'CASCADE',
+      duree_utilisation: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      reference_decision: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      date_attribution: {
+        type: DataTypes.DATE,
+        allowNull: false
+      },
+      date_expiration: {
+        type: DataTypes.DATE,
+        allowNull: true
+      },
+      type_decision: {
+        type: DataTypes.ENUM(
+          "modification",
+          "reclamation",
+          "suspension",
+          "attribution",
+          "retrait",
+          "reservation",
+          "renouvellement",
+          "résiliation"
+        ),
+        allowNull: false
+      },
+      notification_envoyee: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      fichier: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      etat_autorisation: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: true
+      }
     },
-    duree_utilisation: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    reference_decision: {
-      type: DataTypes.STRING,
-      allowNull: true
-    },
-    date_attribution: {
-      type: DataTypes.DATE,
-      allowNull: false
-    },
-    date_expiration: {
-      type: DataTypes.DATE,
-      allowNull: true
-    },
-    type_decision: {
-      type: DataTypes.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation","renouvellement","résiliation"),
-      allowNull: false
-    },
-    fichier: {
-      type: DataTypes.STRING,
-      allowNull: true,
-    },
-    etat_autorisation: {
-      type: DataTypes.BOOLEAN,
-      allowNull: false,
-      defaultValue: true
+    {
+      sequelize,
+      modelName: "AttributionDecision",
+      tableName: "AttributionDecisions",
+      underscored: true,
+      timestamps: true,
+      createdAt: "created_at",
+      updatedAt: "updated_at"
     }
-  }, {
-    sequelize,
-    modelName: 'AttributionDecision',
-    tableName: "AttributionDecisions",
-    underscored: true,
-    timestamps: true,
-    createdAt: "created_at",
-    updatedAt: "updated_at"
-  });
+  );
   return AttributionDecision;
 };

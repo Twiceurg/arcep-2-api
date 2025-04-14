@@ -31,6 +31,12 @@ module.exports = (sequelize, DataTypes) => {
       AttributionNumero.hasMany(models.AttributionDecision, {
         foreignKey: 'attribution_id',
       });
+      AttributionNumero.hasMany(models.HistoriqueAttribution, {
+        foreignKey: 'attribution_id',
+      });
+      AttributionNumero.hasMany(models.HistoriqueAttributionNumero, {
+        foreignKey: 'attribution_id', 
+      });
     }
   }
   AttributionNumero.init(

@@ -30,6 +30,10 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: true
       },
+      activite: {
+        type: Sequelize.STRING,
+        allowNull: true
+      },
       telephone_morale: {
         type: Sequelize.STRING,
         allowNull: true

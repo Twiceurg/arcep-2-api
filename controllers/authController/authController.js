@@ -3,7 +3,11 @@ const bcrypt = require("bcrypt");
 const { Utilisateur, HistoriqueConnexion } = require("../../models");
 
 const login = async (req, res) => {
-  const { username, password } = req.body;
+  let { username, password } = req.body;
+
+  // Suppression des espaces inutiles
+  username = username ? username.trim() : "";
+  password = password ? password.trim() : "";
 
   // Vérification des champs obligatoires
   if (!username || !password) {
@@ -56,7 +60,7 @@ const login = async (req, res) => {
 
     // Création de l'historique de la connexion
     await HistoriqueConnexion.create({
-      utilisateur_id: utilisateur.id, // Utilisation de la bonne colonne
+      utilisateur_id: utilisateur.id,
       adresse_ip: req.ip,
       date_connexion: new Date()
     });
@@ -65,7 +69,7 @@ const login = async (req, res) => {
     const utilisateurSansPassword = { ...utilisateur.get() };
     delete utilisateurSansPassword.password;
 
-    // Réponse avec succès et informations de l'utilisateur et du token
+    // Réponse avec succès
     return res.status(200).json({
       success: true,
       message: "Connexion réussie.",

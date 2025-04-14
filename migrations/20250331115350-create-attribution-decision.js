@@ -35,6 +35,10 @@ module.exports = {
         type: Sequelize.ENUM("modification", "reclamation", "suspension","attribution","retrait","reservation","renouvellement","résiliation"),
         allowNull: false,
       },
+      notification_envoyee: {
+        type: Sequelize.BOOLEAN,
+        defaultValue: false,
+      },
       date_expiration: {
         type: Sequelize.DATEONLY,
         allowNull: true,

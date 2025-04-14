@@ -13,6 +13,12 @@ const controller = require("../controllers/actionController/NumeroAttribueContro
 const authenticateToken = require("../middleware/authenticateToken");
 const historiqueAttributionController = require("../controllers/actionController/historiqueAtributionController");
 const upload = require("../utils/multer");
+const {
+  getNotifications,
+  markAsRead,
+  markAllAsRead,
+  getUnreadNotifications
+} = require("../controllers/actionController/notificationController");
 
 const router = express.Router();
 
@@ -75,13 +81,24 @@ router.delete(
 );
 
 // 📌 Route pour le CRUD des attributions
-router.post("/attribution", AttributionNumeroController.createAttribution);
+router.post(
+  "/attribution",
+  authenticateToken,
+  AttributionNumeroController.createAttribution
+);
 router.get(
   "/attribution/bloc",
   AttributionNumeroController.getAllAttributionsBloc
 );
 router.get("/attribution", AttributionNumeroController.getAllAttributions);
 router.get("/attribution/:id", AttributionNumeroController.getAttributionById);
+router.get("/historiques", AttributionNumeroController.getAllHistoriques);
+
+router.get(
+  "/attributions/:id/historiques",
+  AttributionNumeroController.getHistoriqueByAttributionId
+);
+
 router.get(
   "/attribution/:id/decisions",
   AttributionNumeroController.getAttributionDecisions
@@ -208,5 +225,13 @@ router.put(
   upload.single("file"),
   historiqueAttributionController.assignReference
 );
+
+//Notification
+
+// Route pour récupérer les notifications
+router.get("/notifications", authenticateToken, getNotifications);
+router.patch("/notifications/:id/read", authenticateToken, markAsRead);
+router.patch("/notifications/read-all", authenticateToken, markAllAsRead);
+router.get("/notifications/unread", authenticateToken, getUnreadNotifications);
 
 module.exports = router;

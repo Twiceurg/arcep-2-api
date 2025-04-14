@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notification de Renouvellement</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        background-color: #f4f4f4;
+        margin: 0;
+        padding: 0;
+        position: relative;
+        background-size: contain;
+        opacity: 0.1;
+      }
+
+      .email-container {
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
+        background-color: #ffffff;
+        padding: 20px;
+        border-radius: 8px;
+        position: relative;
+      }
+
+      .email-header {
+        background-color: #24829c;
+        padding: 20px;
+        text-align: center;
+        color: white;
+        border-radius: 8px 8px 0 0;
+      }
+
+      .email-content {
+        margin-top: 20px;
+        font-size: 16px;
+        color: #24829c;
+        line-height: 1.5;
+      }
+
+      .email-footer {
+        text-align: center;
+        font-size: 12px;
+        color: #888;
+        margin-top: 20px;
+        border-top: 1px solid #24829c;
+        padding-top: 10px;
+      }
+
+      .email-footer a {
+        color: #24829c;
+        text-decoration: none;
+      }
+
+      .email-content p {
+        color: #03687c;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="email-container">
+      <div class="email-header">
+        <h1>{{headerMessage}}</h1>
+      </div>
+
+      <div class="email-content">
+        <p>Bonjour,</p>
+        <p>
+          Nous vous informons que la décision de type
+          <strong>{{type_decision}}</strong> pour la référence
+          <strong>{{reference_decision}}</strong> va expirer dans les
+          {{timeRemaining}}. Il est maintenant nécessaire que vous notifiiez le
+          client et lui demandiez de procéder au renouvellement dans les plus
+          brefs délais afin de garantir la continuité du service.
+        </p>
+        <p>
+          <strong>Référence de la décision : </strong>{{reference_decision}} du client {{clientName}}
+        </p>
+        <p><strong>Type de décision : </strong>{{type_decision}}</p>
+        <p><strong>Date d'expiration : </strong>{{date_expiration}}</p>
+        <p>
+          Veuillez contacter le client directement pour lui rappeler la
+          nécessité du renouvellement. Pour toute question ou précision
+          supplémentaire, vous pouvez consulter l'espace interne ou nous
+          contacter.
+        </p>
+      </div>
+
+      <div class="email-footer">
+        <p>
+          Si vous avez des questions, n'hésitez pas à
+          <a href="mailto:contact@votreentreprise.com">nous contacter</a>.
+        </p>
+        <p>&copy; 2025 Votre Entreprise. Tous droits réservés.</p>
+      </div>
+    </div>
+  </body>
+</html>
