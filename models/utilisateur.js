@@ -15,6 +15,11 @@ module.exports = (sequelize, DataTypes) => {
       Utilisateur.hasMany(models.HistoriqueAttributionNumero, {
         foreignKey: "utilisateur_id"
       });
+      Utilisateur.hasMany(models.UssdAttributionHistorique, {
+        foreignKey: "utilisateur_id",
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE"
+      });
     }
   }
   Utilisateur.init(
