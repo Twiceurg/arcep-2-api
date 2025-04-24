@@ -3,8 +3,15 @@ const {
   USSDAttribution,
   UssdAttribuer,
   UssdAttributionHistorique,
+  AttributionNumero,
+  NumeroAttribue,
   Client,
-  UssdDecision
+  Utilisation,
+  RapportUssd,
+  UssdDecision,
+  Utilisateur,
+  HistoriqueAttributionUSSD,
+  UssdRenouvellement
 } = require("../../models");
 
 const { Op } = require("sequelize");
@@ -14,7 +21,7 @@ class AttributionUssdController {
     try {
       const { client_id, ussd_id, ussd_attribue } = req.body;
 
-      console.log("🔵 Données reçues :", { client_id, ussd_id, ussd_attribue });
+      const utilisation_id = parseInt(req.body.utilisation_id, 10);
 
       const ussd = await USSD.findByPk(ussd_id);
       if (!ussd) {
@@ -26,34 +33,14 @@ class AttributionUssdController {
 
       const { prefix, length, bloc_min, bloc_max } = ussd;
 
-      console.log("🔍 Détails de l'USSD sélectionné :", {
-        prefix,
-        length,
-        bloc_min,
-        bloc_max
-      });
-
       const invalidNumbers = [];
       const validNumbers = [];
 
       for (const num of ussd_attribue) {
-        const numInt = parseInt(num); // Conversion sécurisée
-
+        const numInt = parseInt(num);
         const isValidPrefix = num.toString().startsWith(prefix.toString());
         const isValidLength = num.toString().length === length;
         const isInRange = numInt >= bloc_min && numInt <= bloc_max;
-
-        console.log(`🔢 Analyse du numéro : ${num}`);
-        console.log(` - Commence par préfixe : ${isValidPrefix}`);
-        console.log(
-          ` - Longueur attendue : ${length}, Longueur reçue : ${
-            num.toString().length
-          }`
-        );
-        console.log(` - Numéro entier : ${numInt}`);
-        console.log(
-          ` - Est dans la plage ? ${isInRange} => ${bloc_min} <= ${numInt} <= ${bloc_max}`
-        );
 
         if (!isValidPrefix || !isValidLength || !isInRange) {
           invalidNumbers.push(num);
@@ -61,9 +48,6 @@ class AttributionUssdController {
           validNumbers.push(num);
         }
       }
-
-      console.log("✅ Numéros valides :", validNumbers);
-      console.log("❌ Numéros invalides :", invalidNumbers);
 
       if (invalidNumbers.length > 0) {
         return res.json({
@@ -74,18 +58,96 @@ class AttributionUssdController {
         });
       }
 
-      const attribution = await USSDAttribution.create({ client_id, ussd_id });
+      // Vérification de conflits
+      const numeroConflicts = await NumeroAttribue.findAll({
+        where: {
+          numero_attribue: {
+            [Op.in]: validNumbers
+          },
+          statut: {
+            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
+          }
+        },
+        include: [
+          {
+            model: AttributionNumero,
+            include: [Client] // Inclure les détails du client auquel le numéro est attribué
+          }
+        ]
+      });
+
+      const ussdConflicts = await UssdAttribuer.findAll({
+        where: {
+          ussd_attribue: {
+            [Op.in]: validNumbers
+          },
+          statut: {
+            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
+          }
+        },
+        include: [
+          {
+            model: USSDAttribution,
+            include: [Client] // Inclure les détails du client auquel l'USSD est attribué
+          }
+        ]
+      });
+
+      const conflicts = [];
+
+      numeroConflicts.forEach((entry) => {
+        const clientName =
+          entry.AttributionNumero?.Client?.denomination || "client inconnu";
+        conflicts.push(
+          `Le numéro ${entry.numero_attribue} a déjà été attribué a : ${clientName}`
+        );
+      });
+
+      ussdConflicts.forEach((entry) => {
+        const clientName =
+          entry.USSDAttribution?.Client?.denomination || "client inconnu";
+        conflicts.push(
+          `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD a : ${clientName}`
+        );
+      });
+
+      if (conflicts.length > 0) {
+        return res.json({
+          success: false,
+          message: conflicts.join(" ; ")
+        });
+      }
+
+      // Création de l’attribution
+      const attribution = await USSDAttribution.create({
+        client_id,
+        ussd_id,
+        utilisation_id
+      });
 
       const attribs = validNumbers.map((num) => ({
         ussd_attribution_id: attribution.id,
         ussd_id,
+        utilisation_id,
         ussd_attribue: num,
         statut: "attribue"
       }));
 
-      console.log("📦 Enregistrements à créer dans UssdAttribuer :", attribs);
+      const UssdAttribues = await UssdAttribuer.bulkCreate(attribs);
 
-      await UssdAttribuer.bulkCreate(attribs);
+      const historiqueEntries = UssdAttribues.map((UssdAttribue) => ({
+        ussd_attribution_id: attribution.id,
+        numero_id: UssdAttribue.id,
+        numero: UssdAttribue.ussd_attribue,
+        utilisation_id,
+        date_attribution: new Date(),
+        motif: "Attribution initiale",
+        utilisateur_id: req.user.id,
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      await HistoriqueAttributionUSSD.bulkCreate(historiqueEntries);
 
       return res.json({
         success: true,
@@ -104,27 +166,46 @@ class AttributionUssdController {
   static async getAllUssdAttributions(req, res) {
     try {
       const { clientId, ussdId, mois, annee, expirer } = req.query;
-  
+
       const whereConditions = {};
-  
+
       if (clientId) {
         whereConditions.client_id = clientId;
       }
-  
+
       if (ussdId) {
         whereConditions.ussd_id = ussdId;
       }
-  
-      // Filtre par mois et année
+
+      // Filtre par mois et/ou année sur date_attribution
       if (mois && annee) {
-        const startDate = new Date(annee, mois - 1, 1);
-        const endDate = new Date(annee, mois, 0);
-        whereConditions.created_at = {
-          [Sequelize.Op.gte]: startDate,
-          [Sequelize.Op.lte]: endDate,
+        const startDate = new Date(annee, mois - 1, 1); // Premier jour du mois
+        const endDate = new Date(annee, mois, 0); // Dernier jour du mois
+
+        whereConditions.date_attribution = {
+          [Op.gte]: startDate,
+          [Op.lte]: endDate
+        };
+      } else if (mois) {
+        // Si seulement le mois est fourni
+        const startDate = new Date(new Date().getFullYear(), mois - 1, 1); // Premier jour du mois
+        const endDate = new Date(new Date().getFullYear(), mois, 0); // Dernier jour du mois
+
+        whereConditions.date_attribution = {
+          [Op.gte]: startDate,
+          [Op.lte]: endDate
+        };
+      } else if (annee) {
+        // Si seulement l'année est fournie
+        const startDate = new Date(annee, 0, 1); // Premier jour de l'année
+        const endDate = new Date(annee, 11, 31); // Dernier jour de l'année
+
+        whereConditions.date_attribution = {
+          [Op.gte]: startDate,
+          [Op.lte]: endDate
         };
       }
-  
+
       const ussdAttributions = await USSDAttribution.findAll({
         where: whereConditions,
         include: [
@@ -133,25 +214,29 @@ class AttributionUssdController {
           { model: USSD },
           {
             model: UssdDecision,
-            order: [["date_attribution", "ASC"]],
+            order: [["date_attribution", "ASC"]]
           },
-        ],
+          { model: RapportUssd },
+          { model: Utilisation }
+        ]
       });
-  
+
       // Fonction pour récupérer la décision pertinente
       const getDecisionPertinente = (decisions = []) => {
         if (decisions.length === 0) return null;
-  
+
         const sorted = [...decisions].sort(
           (a, b) => new Date(b.created_at) - new Date(a.created_at)
         );
-  
-        const resiliation = sorted.find((d) => d.type_decision === "résiliation");
+
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
         if (resiliation) return resiliation;
-  
+
         const retrait = sorted.find((d) => d.type_decision === "retrait");
         if (retrait) return retrait;
-  
+
         const suspension = sorted.find((d) => d.type_decision === "suspension");
         if (
           suspension?.date_expiration &&
@@ -159,35 +244,37 @@ class AttributionUssdController {
         ) {
           return suspension;
         }
-  
+
         const modifOrRecla = sorted.find(
           (d) =>
             d.type_decision === "modification" ||
             d.type_decision === "reclamation"
         );
         if (modifOrRecla) return modifOrRecla;
-  
+
         const renouvellement = sorted.find(
           (d) => d.type_decision === "renouvellement"
         );
         if (renouvellement) return renouvellement;
-  
+
         return (
           sorted.find((d) => d.type_decision === "attribution") || sorted[0]
         );
       };
-  
+
       // ➕ Ajout de la décision pertinente à chaque attribution
       let results = ussdAttributions.map((attr) => {
         const attrPlain = attr.get({ plain: true });
-        const decisionPertinente = getDecisionPertinente(attrPlain.UssdDecisions);
-  
+        const decisionPertinente = getDecisionPertinente(
+          attrPlain.UssdDecisions
+        );
+
         return {
           ...attrPlain,
-          decision_pertinente: decisionPertinente,
+          decision_pertinente: decisionPertinente
         };
       });
-  
+
       // Filtrage selon expiration si demandé
       if (expirer === "true") {
         results = results.filter(
@@ -202,73 +289,169 @@ class AttributionUssdController {
             new Date(attr.decision_pertinente.date_expiration) > new Date()
         );
       }
-  
+
       return res.status(200).json(results);
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur serveur" });
     }
   }
-  
+
   static async reclamerUssdAttribution(req, res) {
     try {
       const { id } = req.params; // ID de l'attribution USSD
       const { client_id, ussd_id, ussd_attribue, motif } = req.body;
+      const utilisation_id = parseInt(req.body.utilisation_id, 10);
       const file = req.file;
-  
-      if (!ussd_attribue || !Array.isArray(ussd_attribue) || ussd_attribue.length === 0) {
+
+      // Vérification des données requises
+      if (
+        !ussd_attribue ||
+        !Array.isArray(ussd_attribue) ||
+        ussd_attribue.length === 0
+      ) {
         return res.status(400).json({
           success: false,
-          message: "Le tableau des USSD attribués est requis et doit être non vide"
+          message:
+            "Le tableau des USSD attribués est requis et doit être non vide"
         });
       }
-  
+
+      // Récupération de l'attribution
       const attribution = await USSDAttribution.findByPk(id);
       if (!attribution) {
-        return res.status(404).json({ success: false, message: "Attribution introuvable" });
+        return res
+          .status(404)
+          .json({ success: false, message: "Attribution introuvable" });
       }
-  
+
+      // Mise à jour de l'attribution si utilisation_id est présent
+      if (utilisation_id) {
+        attribution.utilisation_id = utilisation_id;
+        await attribution.save();
+      }
+
+      // Vérification de l'USSD
       const ussd = await USSD.findByPk(ussd_id);
       if (!ussd) {
-        return res.status(404).json({ success: false, message: "USSD introuvable" });
+        return res
+          .status(404)
+          .json({ success: false, message: "USSD introuvable" });
       }
-  
+
       const { prefix, length, bloc_min, bloc_max } = ussd;
       const invalidNumbers = [];
       const validNumbers = [];
-  
+
+      // Validation des numéros attribués
       for (const num of ussd_attribue) {
         const numInt = parseInt(num);
         const isValidPrefix = num.toString().startsWith(prefix.toString());
         const isValidLength = num.toString().length === length;
         const isInRange = numInt >= bloc_min && numInt <= bloc_max;
-  
+
         if (!isValidPrefix || !isValidLength || !isInRange) {
           invalidNumbers.push(num);
         } else {
           validNumbers.push(num);
         }
       }
-  
+
+      // Si des numéros sont invalides
       if (invalidNumbers.length > 0) {
         return res.status(400).json({
           success: false,
-          message: `Les numéros suivants sont hors plage ou invalides : ${invalidNumbers.join(", ")}`
+          message: `Les numéros suivants sont hors plage ou invalides : ${invalidNumbers.join(
+            ", "
+          )}`
         });
       }
-  
+
+      // Vérification de conflits
+      const numeroConflicts = await NumeroAttribue.findAll({
+        where: {
+          numero_attribue: {
+            [Op.in]: validNumbers
+          },
+          statut: {
+            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
+          }
+        },
+        include: [
+          {
+            model: AttributionNumero,
+            include: [Client]
+          }
+        ]
+      });
+
+      const ussdConflicts = await UssdAttribuer.findAll({
+        where: {
+          ussd_attribue: {
+            [Op.in]: validNumbers
+          },
+          statut: {
+            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
+          }
+        },
+        include: [
+          {
+            model: USSDAttribution,
+            include: [Client]
+          }
+        ]
+      });
+
+      const conflicts = [];
+
+      numeroConflicts.forEach((entry) => {
+        const clientName =
+          entry.AttributionNumero?.Client?.denomination || "client inconnu";
+        conflicts.push(
+          `Le numéro ${entry.numero_attribue} a déjà été attribué à : ${clientName}`
+        );
+      });
+
+      ussdConflicts.forEach((entry) => {
+        const clientName =
+          entry.USSDAttribution?.Client?.denomination || "client inconnu";
+        conflicts.push(
+          `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD à : ${clientName}`
+        );
+      });
+
+      if (conflicts.length > 0) {
+        return res.json({
+          success: false,
+          message: conflicts.join(" ; ")
+        });
+      }
+
       // Récupérer les numéros déjà attribués
       const existing = await UssdAttribuer.findAll({
         where: {
           ussd_attribution_id: id
         }
       });
-  
+
       const existingNumbers = existing.map((e) => e.ussd_attribue);
-  
-      const toDelete = existingNumbers.filter((num) => !validNumbers.includes(num));
-      const toAdd = validNumbers.filter((num) => !existingNumbers.includes(num));
-  
+
+      const toDelete = existingNumbers.filter(
+        (num) => !validNumbers.includes(num)
+      );
+      const toAdd = validNumbers.filter(
+        (num) => !existingNumbers.includes(num)
+      );
+
+      // Créer les entrées à ajouter dans UssdAttribuer
+      const newEntries = toAdd.map((num) => ({
+        ussd_attribution_id: id,
+        ussd_id,
+        ussd_attribue: num,
+        statut: "attribue",
+        utilisation_id
+      }));
+
       // Supprimer ceux qui ne sont plus attribués
       if (toDelete.length > 0) {
         await UssdAttribuer.destroy({
@@ -278,17 +461,24 @@ class AttributionUssdController {
           }
         });
       }
-  
+
       // Ajouter les nouveaux
-      const newEntries = toAdd.map((num) => ({
-        ussd_attribution_id: id,
-        ussd_id,
-        ussd_attribue: num,
-        statut: "attribue"
+      const UssdAttribues = await UssdAttribuer.bulkCreate(newEntries);
+
+      const historiqueEntries = UssdAttribues.map((UssdAttribue) => ({
+        ussd_attribution_id: attribution.id,
+        numero_id: UssdAttribue.id,
+        numero: UssdAttribue.ussd_attribue,
+        date_attribution: new Date(),
+        motif: motif || "Reclamation de l'attribution",
+        utilisateur_id: req.user.id,
+        created_at: new Date(),
+        updated_at: new Date()
       }));
-  
-      await UssdAttribuer.bulkCreate(newEntries);
-  
+
+      // Insérer les historiques dans la table HistoriqueAttributionNumero
+      await HistoriqueAttributionUSSD.bulkCreate(historiqueEntries);
+
       // Sauvegarde de l'historique (à adapter selon ton modèle UssdAttributionHistorique)
       await UssdAttributionHistorique.create({
         ussd_attribution_id: id,
@@ -300,7 +490,7 @@ class AttributionUssdController {
         fichier: file ? `/uploads/${file.filename}` : null,
         date_modification: new Date()
       });
-  
+
       return res.json({
         success: true,
         message: "Réclamation effectuée avec succès",
@@ -308,13 +498,13 @@ class AttributionUssdController {
         nouveaux_numeros: toAdd,
         numeros_supprimes: toDelete
       });
-  
     } catch (error) {
       console.error("❗ Erreur lors de la réclamation :", error);
-      return res.status(500).json({ message: "Erreur serveur", error: error.message });
+      return res
+        .status(500)
+        .json({ message: "Erreur serveur", error: error.message });
     }
   }
-  
 
   static async getAttributionUssdDecisions(req, res) {
     const { id } = req.params; // Récupérer l'id depuis les paramètres de la route
@@ -329,7 +519,7 @@ class AttributionUssdController {
 
     try {
       const decisions = await UssdDecision.findAll({
-        where: { ussd_attribution_id: id }  
+        where: { ussd_attribution_id: id }
       });
 
       // Vérifier si des décisions existent
@@ -354,6 +544,96 @@ class AttributionUssdController {
     }
   }
 
+  static async getAllUssdHistoriques(req, res) {
+    try {
+      const historiques = await HistoriqueAttributionUSSD.findAll({
+        order: [["created_at", "DESC"]],
+        include: [
+          {
+            model: USSDAttribution,
+            include: [
+              { model: Client },
+              { model: USSD },
+              { model: UssdAttribuer },
+              { model: RapportUssd },
+              { model: UssdRenouvellement },
+              { model: UssdDecision }, // ⚠️ Attention : ici, tu dois avoir un hasMany/belongsToMany si tu veux récupérer un tableau
+              { model: UssdAttributionHistorique }
+            ]
+          },
+          {
+            model: Utilisateur
+          }
+        ]
+      });
+
+      // 🔎 Fonction pour déterminer la décision pertinente
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
+        if (resiliation) return resiliation;
+
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        ) {
+          return suspension;
+        }
+
+        const modifOrRecla = sorted.find((d) =>
+          ["modification", "reclamation"].includes(d.type_decision)
+        );
+        if (modifOrRecla) return modifOrRecla;
+
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) return renouvellement;
+
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
+      // 🛠 Traitement des historiques pour ajouter la décision pertinente
+      const historiquesWithDecision = historiques.map((histo) => {
+        const histoPlain = histo.get({ plain: true });
+        const attribution = histoPlain.USSDAttribution;
+
+        if (attribution?.UssdDecisions) {
+          const decisionPertinente = getDecisionPertinente(
+            attribution.UssdDecisions
+          );
+          histoPlain.USSDAttribution.decision_pertinente = decisionPertinente;
+        }
+
+        return histoPlain;
+      });
+
+      return res.status(200).json({
+        success: true,
+        data: historiquesWithDecision
+      });
+    } catch (error) {
+      console.error("Erreur lors de la récupération des historiques:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Erreur lors de la récupération des historiques"
+      });
+    }
+  }
+
   // static async getUssdAttributionById(req, res) {
   //   try {
   //     const { id } = req.params;
@@ -364,7 +644,7 @@ class AttributionUssdController {
   //         { model: USSD },
   //         { model: UssdAttribuer },
   //         {
-  //           model: UssdDecision, 
+  //           model: UssdDecision,
   //           order: [["created_at", "ASC"]]
   //         }
   //       ]
@@ -497,7 +777,7 @@ class AttributionUssdController {
         include: [
           { model: USSD },
           { model: Client },
-          { model: UssdAttribuer},
+          { model: UssdAttribuer },
           {
             model: UssdDecision,
             order: [["created_at", "ASC"]]
@@ -573,6 +853,9 @@ class AttributionUssdController {
         dateExpiration.setMonth(dateExpiration.getMonth() + dureeEnMois);
       }
 
+      ussdAttribution.date_attribution = attributionDate;
+      await ussdAttribution.save();
+
       // Création de la décision d'attribution pour USSD
       const ussdDecision = await UssdDecision.create({
         ussd_attribution_id: ussdAttribution.id, // L'ID de l'attribution USSD
@@ -584,6 +867,21 @@ class AttributionUssdController {
         fichier: file ? `/uploads/${file.filename}` : null, // Si un fichier est téléchargé, l'ajouter
         type_decision: "attribution"
       });
+
+      // Trouver tous les numéros USSD attribués liés à l'attribution
+      const numerosAttribues = await UssdAttribuer.findAll({
+        where: { ussd_attribution_id: ussdAttribution.id }
+      });
+
+      if (!numerosAttribues.length) {
+        return res.status(404).json({ message: "Aucun USSD attribué trouvé" });
+      }
+
+      // Mise à jour de la date d'attribution pour chaque numéro USSD
+      for (const numeroAttribue of numerosAttribues) {
+        numeroAttribue.date_attribution = attributionDate;
+        await numeroAttribue.save();
+      }
 
       // Réponse si l'attribution et la décision ont été bien mises à jour
       return res.status(200).json({
@@ -597,7 +895,6 @@ class AttributionUssdController {
       return res.status(500).json({ message: "Erreur interne du serveur" });
     }
   }
-  
 
   static async assignUssdReservationReference(req, res) {
     try {
@@ -675,6 +972,19 @@ class AttributionUssdController {
         fichier: file ? `/uploads/${file.filename}` : null, // Si un fichier est téléchargé, l'ajouter
         type_decision: "reservation"
       });
+
+      const numerosAttribues = await UssdAttribuer.findAll({
+        where: { ussd_attribution_id: ussdAttribution.id }
+      });
+
+      if (!numerosAttribues.length) {
+        return res.status(404).json({ message: "Aucun USSD attribué trouvé" });
+      }
+
+      for (const numeroAttribue of numerosAttribues) {
+        numeroAttribue.date_attribution = attributionDate;
+        await numeroAttribue.save();
+      }
 
       // Réponse si l'attribution et la décision ont été bien mises à jour
       return res.status(200).json({

@@ -20,6 +20,10 @@ module.exports = {
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
       },
+      date_attribution: {
+        type: Sequelize.DATEONLY,
+        allowNull: true
+      },
       ussd_id: {
         type: Sequelize.INTEGER,
         allowNull: false,
@@ -34,6 +38,16 @@ module.exports = {
         // Nom correct pour l'attribut "ussd_attribue"
         type: Sequelize.STRING,
         allowNull: false
+      },
+      utilisation_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
       },
       statut: {
         type: Sequelize.ENUM(

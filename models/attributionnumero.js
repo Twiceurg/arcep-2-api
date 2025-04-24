@@ -57,10 +57,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true
       },
-      duree_utilisation: {
-        type: DataTypes.STRING,
-        allowNull: true
-      },
+ 
       utilisation_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -78,10 +75,6 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
       date_attribution: {
-        type: DataTypes.DATEONLY,
-        allowNull: true
-      },
-      date_expiration: {
         type: DataTypes.DATEONLY,
         allowNull: true
       },

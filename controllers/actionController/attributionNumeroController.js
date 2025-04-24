@@ -2,10 +2,12 @@ const {
   AttributionNumero,
   Client,
   Service,
+  USSDAttribution,
   TypeUtilisation,
   NumeroAttribue,
   AttributionDecision,
   Utilisation,
+  UssdAttribuer,
   Rapport,
   HistoriqueAttribution,
   Renouvellement,
@@ -71,24 +73,62 @@ class AttributionNumeroController {
         }
       }
 
-      // Vérifier si l'un des numéros existe déjà dans NumeroAttribue
-      const existingNumbers = await NumeroAttribue.findAll({
+      const numeroConflicts = await NumeroAttribue.findAll({
         where: {
           numero_attribue: {
-            [Op.in]: numero_attribue // Chercher tous les numéros dans le tableau
+            [Op.in]: validNumbers
+          },
+          statut: {
+            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
           }
-        }
+        },
+        include: [
+          {
+            model: AttributionNumero,
+            include: [Client] // Inclure les détails du client auquel le numéro est attribué
+          }
+        ]
       });
 
-      if (existingNumbers.length > 0) {
-        const alreadyAssignedNumbers = existingNumbers.map(
-          (num) => num.numero_attribue
+      const ussdConflicts = await UssdAttribuer.findAll({
+        where: {
+          ussd_attribue: {
+            [Op.in]: validNumbers
+          },
+          statut: {
+            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
+          }
+        },
+        include: [
+          {
+            model: USSDAttribution,
+            include: [Client] // Inclure les détails du client auquel l'USSD est attribué
+          }
+        ]
+      });
+
+      const conflicts = [];
+
+      numeroConflicts.forEach((entry) => {
+        const clientName =
+          entry.AttributionNumero?.Client?.denomination || "client inconnu";
+        conflicts.push(
+          `Le numéro ${entry.numero_attribue} a déjà été attribué a : ${clientName}`
         );
+      });
+
+      ussdConflicts.forEach((entry) => {
+        const clientName =
+          entry.USSDAttribution?.Client?.denomination || "client inconnu";
+        conflicts.push(
+          `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD a  : ${clientName}`
+        );
+      });
+
+      if (conflicts.length > 0) {
         return res.status(409).json({
           success: false,
-          message: `Les numéros suivants sont déjà attribués: ${alreadyAssignedNumbers.join(
-            ", "
-          )}`
+          message: conflicts.join(" ; ")
         });
       }
 
@@ -116,6 +156,7 @@ class AttributionNumeroController {
       const numeroAttribueEntries = numero_attribue.map((numero) => ({
         attribution_id: attribution.id,
         numero_attribue: numero,
+        utilisation_id,
         pnn_id: pnn_id,
         created_at: new Date(),
         updated_at: new Date()
@@ -170,12 +211,28 @@ class AttributionNumeroController {
         whereConditions["service_id"] = serviceId;
       }
 
-      // Filtre par mois et année
+      // Filtre par mois et année basé sur date_attribution
       if (mois && annee) {
         const startDate = new Date(annee, mois - 1, 1); // Le premier jour du mois
         const endDate = new Date(annee, mois, 0); // Le dernier jour du mois
 
-        whereConditions.created_at = {
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (annee) {
+        const startDate = new Date(annee, 0, 1); // Le premier jour de l'année
+        const endDate = new Date(annee, 11, 31); // Le dernier jour de l'année
+
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (mois) {
+        const startDate = new Date(new Date().getFullYear(), mois - 1, 1); // Premier jour du mois courant de l'année actuelle
+        const endDate = new Date(new Date().getFullYear(), mois, 0); // Dernier jour du mois courant de l'année actuelle
+
+        whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
         };
@@ -187,7 +244,7 @@ class AttributionNumeroController {
           { model: Client },
           {
             model: AttributionDecision,
-            order: [["created_at", "ASC"]]
+            order: [["date_attribution", "ASC"]]
           },
           {
             model: Service,
@@ -323,12 +380,30 @@ class AttributionNumeroController {
         whereConditions["service_id"] = serviceId;
       }
 
-      // Filtre par mois et année
+      // Filtre par mois et/ou année sur date_attribution
       if (mois && annee) {
-        const startDate = new Date(annee, mois - 1, 1);
-        const endDate = new Date(annee, mois, 0);
+        const startDate = new Date(annee, mois - 1, 1); // Premier jour du mois
+        const endDate = new Date(annee, mois, 0); // Dernier jour du mois
 
-        whereConditions.created_at = {
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (mois) {
+        // Si seulement le mois est fourni
+        const startDate = new Date(new Date().getFullYear(), mois - 1, 1); // Premier jour du mois
+        const endDate = new Date(new Date().getFullYear(), mois, 0); // Dernier jour du mois
+
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (annee) {
+        // Si seulement l'année est fournie
+        const startDate = new Date(annee, 0, 1); // Premier jour de l'année
+        const endDate = new Date(annee, 11, 31); // Dernier jour de l'année
+
+        whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
         };
@@ -980,10 +1055,35 @@ class AttributionNumeroController {
           dureeEnMois *= 12; // Convertir en mois si c'est en années
         }
 
+        // Mise à jour de la date d'attribution pour l'attribution principale
+        attribution.date_attribution = attributionDate;
+        await attribution.save();
+
+        // Trouver tous les numéros attribués liés à l'attribution
+        const numerosAttribues = await NumeroAttribue.findAll({
+          where: { attribution_id: attribution.id }
+        });
+
+        if (!numerosAttribues.length) {
+          return res
+            .status(404)
+            .json({ message: "Aucun numéro attribué trouvé" });
+        }
+
+        // Mise à jour de la date d'attribution pour chaque numéro
+        for (const numeroAttribue of numerosAttribues) {
+          numeroAttribue.date_attribution = attributionDate;
+          await numeroAttribue.save();
+        }
+
         // Calcul de la date d'expiration
         dateExpiration = new Date(attributionDate);
         dateExpiration.setMonth(dateExpiration.getMonth() + dureeEnMois);
       }
+
+      // Mise à jour de la date d'attribution pour l'attribution principale si catégorie est 1
+      attribution.date_attribution = attributionDate;
+      await attribution.save();
 
       // Création de la décision d'attribution
       const attributionDecision = await AttributionDecision.create({
@@ -996,6 +1096,23 @@ class AttributionNumeroController {
         fichier: `/uploads/${file.filename}`,
         type_decision: "attribution"
       });
+
+      // Trouver à nouveau tous les numéros attribués liés à l'attribution
+      const updatedNumerosAttribues = await NumeroAttribue.findAll({
+        where: { attribution_id: attribution.id }
+      });
+
+      if (!updatedNumerosAttribues.length) {
+        return res
+          .status(404)
+          .json({ message: "Aucun numéro attribué trouvé" });
+      }
+
+      // Mise à jour de la date d'attribution pour chaque numéro
+      for (const numeroAttribue of updatedNumerosAttribues) {
+        numeroAttribue.date_attribution = attributionDate;
+        await numeroAttribue.save();
+      }
 
       // Réponse si l'attribution et la décision ont été bien mises à jour
       return res.status(200).json({

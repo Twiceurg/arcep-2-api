@@ -22,11 +22,25 @@ module.exports = {
         type: Sequelize.STRING,
         allowNull: false
       },
+      date_attribution: {
+        type: Sequelize.DATEONLY,
+        allowNull: true
+      },
       pnn_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
         references: {
           model: "Pnns",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
+      },
+      utilisation_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
           key: "id"
         },
         onUpdate: "CASCADE",

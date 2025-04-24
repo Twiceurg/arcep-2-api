@@ -16,6 +16,9 @@ module.exports = (sequelize, DataTypes) => {
       NumeroAttribue.hasMany(models.HistoriqueAttributionNumero, {
         foreignKey: "numero_id"
       });
+      NumeroAttribue.belongsTo(models.Utilisation, {
+        foreignKey: "utilisation_id"
+      });
     }
   }
   NumeroAttribue.init(
@@ -28,6 +31,18 @@ module.exports = (sequelize, DataTypes) => {
           key: "id"
         },
         onDelete: "CASCADE"
+      },
+      utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        }
+      },
+      date_attribution: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
       },
       pnn_id: {
         type: DataTypes.INTEGER,

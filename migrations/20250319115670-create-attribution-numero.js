@@ -61,10 +61,6 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
-      duree_utilisation: {
-        type: Sequelize.STRING,
-        allowNull: true
-      },
       regle: {
         type: Sequelize.STRING,
         allowNull: true
@@ -76,10 +72,6 @@ module.exports = {
       date_attribution: {
         type: Sequelize.DATEONLY,
         allowNull: false
-      },
-      date_expiration: {
-        type: Sequelize.DATEONLY,
-        allowNull: true
       },
       etat_autorisation: {
         type: Sequelize.BOOLEAN,

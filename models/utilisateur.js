@@ -20,6 +20,11 @@ module.exports = (sequelize, DataTypes) => {
         onUpdate: "CASCADE",
         onDelete: "CASCADE"
       });
+      Utilisateur.hasMany(models.HistoriqueAttributionUSSD, {
+        foreignKey: "utilisateur_id",
+        onUpdate: "CASCADE",
+        onDelete: "CASCADE"
+      });
     }
   }
   Utilisateur.init(

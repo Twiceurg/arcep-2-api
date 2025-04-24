@@ -26,6 +26,15 @@ module.exports = (sequelize, DataTypes) => {
       Utilisation.hasMany(models.AttributionNumero, {
         foreignKey: "utilisation_id"
       });
+      Utilisation.hasMany(models.NumeroAttribue, {
+        foreignKey: "utilisation_id"
+      });
+      Utilisation.hasMany(models.USSDAttribution, {
+        foreignKey: "utilisation_id"
+      });
+      Utilisation.hasMany(models.UssdAttribuer, {
+        foreignKey: "utilisation_id"
+      });
     }
   }
 

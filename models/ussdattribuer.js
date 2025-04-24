@@ -15,6 +15,15 @@ module.exports = (sequelize, DataTypes) => {
       UssdAttribuer.belongsTo(models.USSD, {
         foreignKey: "ussd_id"
       });
+
+      UssdAttribuer.hasMany(models.HistoriqueAttributionUSSD, {
+        foreignKey: 'numero_id', 
+      });
+
+      UssdAttribuer.belongsTo(models.Utilisation, {
+        foreignKey: "utilisation_id"
+      });
+      
     }
   }
   UssdAttribuer.init(
@@ -38,6 +47,18 @@ module.exports = (sequelize, DataTypes) => {
         },
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
+      },
+      utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        }
+      },
+      date_attribution: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
       },
       ussd_attribue: {
         type: DataTypes.STRING,

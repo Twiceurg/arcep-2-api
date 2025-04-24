@@ -23,9 +23,24 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "ussd_attribution_id"
       });
       USSDAttribution.hasMany(models.UssdAttributionHistorique, {
-        foreignKey: "ussd_attribution_id",  
+        foreignKey: "ussd_attribution_id",
         onUpdate: "CASCADE",
         onDelete: "CASCADE"
+      });
+      USSDAttribution.hasMany(models.RapportUssd, {
+        foreignKey: "ussd_attribution_id",
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE"
+      });
+      USSDAttribution.hasMany(models.UssdRenouvellement, {
+        foreignKey: "ussd_attribution_id"
+      });
+      USSDAttribution.hasMany(models.HistoriqueAttributionUSSD, {
+        foreignKey: "ussd_attribution_id"
+      });
+
+      USSDAttribution.belongsTo(models.Utilisation, {
+        foreignKey: "utilisation_id"
       });
     }
   }
@@ -41,6 +56,14 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
       },
+      utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        }
+      },
       client_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -50,6 +73,10 @@ module.exports = (sequelize, DataTypes) => {
         },
         onDelete: "SET NULL",
         onUpdate: "CASCADE"
+      },
+      date_attribution: {
+        type: DataTypes.DATEONLY,
+        allowNull: true
       },
       status: {
         type: DataTypes.BOOLEAN,

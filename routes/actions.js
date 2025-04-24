@@ -33,7 +33,13 @@ const {
   libererUssdAttribue
 } = require("../controllers/actionController/ussdAttribuerListe");
 const historiqueUSSDAttributionController = require("../controllers/actionController/historiqueUSSDAttributionController");
-const dashboardController = require('../controllers/dashboardController');
+const dashboardController = require("../controllers/dashboardController");
+const {
+  renewUssdAttribution,
+  getAllUssdRenouvellement,
+  getUssdRenouvellementById
+} = require("../controllers/actionController/RenouvelementUssdController");
+const RapportUssdController = require("../controllers/actionController/rapportUssdController");
 
 const router = express.Router();
 
@@ -301,14 +307,18 @@ router.get(
 router.put(
   "/ussd-attribution/:id/reclamer",
   authenticateToken,
-  upload.single("fichier"), 
+  upload.single("fichier"),
   AttributionUssdController.reclamerUssdAttribution
 );
-
 
 router.get(
   "/ussd-attribution/:id/decisionsUSSD",
   AttributionUssdController.getAttributionUssdDecisions
+);
+
+router.get(
+  "/ussd-attribution/historiques",
+  AttributionUssdController.getAllUssdHistoriques
 );
 
 // Vous pouvez ajouter des routes pour la mise à jour et la suppression si nécessaire
@@ -367,8 +377,28 @@ router.post(
   upload.single("file"),
   historiqueUSSDAttributionController.assignUssdReference
 );
+router.post(
+  "/ussd/renouvellements",
+  upload.single("fichier"),
+  renewUssdAttribution
+);
+router.get("/ussd/renouvellements", getAllUssdRenouvellement);
+router.get("/ussd/renouvellements/:id", getUssdRenouvellementById);
 
-router.get('/dashboard/:utilisationId/attributions', dashboardController.getTotalAndRemainingNumbers);
+router.get(
+  "/dashboard/:utilisationId/attributions",
+  dashboardController.getTotalAndRemainingNumbers
+);
+router.get("/dashboard", dashboardController.getAllTotalAndRemainingNumbers);
 
+router.post("/rapport-ussd/", RapportUssdController.createRapportUssd);
+router.get("/rapport-ussd/:id", RapportUssdController.getRapportUssdById);
+router.get("/rapport-ussd/", RapportUssdController.getAllRapportUssds);
+router.get(
+  "/rapport-ussd/attribution/:attribution_id",
+  RapportUssdController.getRapportsUssdByAttribution
+);
+router.put("/rapport-ussd/:id", RapportUssdController.updateRapportUssd);
+router.delete("/rapport-ussd/:id", RapportUssdController.deleteRapportUssd);
 
 module.exports = router;

@@ -1,10 +1,18 @@
-const { UssdAttribuer, USSDAttribution, USSD, UssdDecision, Client } = require("../../models");
+const {
+  UssdAttribuer,
+  USSDAttribution,
+  Utilisation,
+  USSD,
+  UssdDecision,
+  Client
+} = require("../../models");
 const { Op, fn, col } = require("sequelize");
 
 // Fonction pour récupérer tous les USSD attribués avec les conditions spécifiées
 exports.getAllUssdAttributions = async (req, res) => {
   try {
-    const { statut, client_id, multipleAttributions, ussd_attribue } = req.query;
+    const { statut, client_id, multipleAttributions, ussd_attribue } =
+      req.query;
 
     // Préparer les conditions de filtrage pour les USSDs attribués
     const whereUssdAttribue = {};
@@ -31,25 +39,26 @@ exports.getAllUssdAttributions = async (req, res) => {
           include: [
             {
               model: UssdDecision,
-              limit: 1,  
-              order: [["date_attribution", "DESC"]]  
+              limit: 1,
+              order: [["date_attribution", "DESC"]]
             },
             {
               model: Client,
-              required: client_id ? true : false, 
-              where: whereClient  
-            }
+              required: client_id ? true : false,
+              where: whereClient
+            },
+            { model: Utilisation }
           ],
-          required: true  
+          required: true
         },
         {
-          model: USSD, 
-          required: true,  
+          model: USSD,
+          required: true
         }
       ],
       group: ["UssdAttribuer.id"],
-      having: havingMultipleAttributions,  
-      order: [["created_at", "DESC"]] 
+      having: havingMultipleAttributions,
+      order: [["created_at", "DESC"]]
     });
 
     return res.status(200).json({
@@ -92,11 +101,9 @@ exports.libererUssdAttribue = async (req, res) => {
       .json({ success: true, message: "USSD attribué libéré avec succès" });
   } catch (error) {
     console.error(error);
-    return res
-      .status(500)
-      .json({
-        success: false,
-        message: "Erreur lors de la libération du USSD attribué"
-      });
+    return res.status(500).json({
+      success: false,
+      message: "Erreur lors de la libération du USSD attribué"
+    });
   }
 };
