@@ -19,6 +19,27 @@ const {
   markAllAsRead,
   getUnreadNotifications
 } = require("../controllers/actionController/notificationController");
+const {
+  createUSSD,
+  getAllUSSDs,
+  getUSSDById,
+  updateUSSD,
+  deleteUSSD,
+  toggleStatusUSSD
+} = require("../controllers/actionController/ussdController");
+const AttributionUssdController = require("../controllers/actionController/attribuerUssd");
+const {
+  getAllUssdAttributions,
+  libererUssdAttribue
+} = require("../controllers/actionController/ussdAttribuerListe");
+const historiqueUSSDAttributionController = require("../controllers/actionController/historiqueUSSDAttributionController");
+const dashboardController = require("../controllers/dashboardController");
+const {
+  renewUssdAttribution,
+  getAllUssdRenouvellement,
+  getUssdRenouvellementById
+} = require("../controllers/actionController/RenouvelementUssdController");
+const RapportUssdController = require("../controllers/actionController/rapportUssdController");
 
 const router = express.Router();
 
@@ -233,5 +254,151 @@ router.get("/notifications", authenticateToken, getNotifications);
 router.patch("/notifications/:id/read", authenticateToken, markAsRead);
 router.patch("/notifications/read-all", authenticateToken, markAllAsRead);
 router.get("/notifications/unread", authenticateToken, getUnreadNotifications);
+
+//Tout ce qui concerne les ussd
+
+// Route POST pour créer un USSD
+router.post("/ussds", createUSSD);
+
+router.get("/ussds", getAllUSSDs);
+router.get("/ussds/:id", getUSSDById);
+router.put("/ussds/:id", updateUSSD);
+router.delete("/ussds/:id", deleteUSSD);
+router.patch("/ussds/:id/status", toggleStatusUSSD);
+
+// Route pour créer une attribution USSD
+
+router.post(
+  "/ussd-attribution/create-ussd",
+  authenticateToken, // Middleware d'authentification
+  AttributionUssdController.createUssdAttribution
+);
+
+// Route pour obtenir toutes les attributions USSD
+router.get(
+  "/ussd-attribution/get-ussds",
+  authenticateToken, // Middleware d'authentification
+  AttributionUssdController.getAllUssdAttributions
+);
+
+// Route pour obtenir une attribution USSD par ID
+router.get(
+  "/ussd-attribution/get-ussd/:id",
+  authenticateToken, // Middleware d'authentification
+  AttributionUssdController.getUssdAttributionById
+);
+
+router.put(
+  "/ussd-attribution/:id/assign-ussd-reference",
+  authenticateToken,
+  upload.single("file"),
+  AttributionUssdController.assignUssdReference
+);
+router.put(
+  "/ussd-attribution/:id/assign-ussd-reclmation-reference",
+  authenticateToken,
+  upload.single("file"),
+  AttributionUssdController.assignUssdReservationReference
+);
+router.get(
+  "/ussd-attribution/:ussd_id/assigned-numbers",
+  AttributionUssdController.getAssignedNumbersByUssd
+);
+router.put(
+  "/ussd-attribution/:id/reclamer",
+  authenticateToken,
+  upload.single("fichier"),
+  AttributionUssdController.reclamerUssdAttribution
+);
+
+router.get(
+  "/ussd-attribution/:id/decisionsUSSD",
+  AttributionUssdController.getAttributionUssdDecisions
+);
+
+router.get(
+  "/ussd-attribution/historiques",
+  AttributionUssdController.getAllUssdHistoriques
+);
+
+// Vous pouvez ajouter des routes pour la mise à jour et la suppression si nécessaire
+// router.put(
+//   "/update-ussd/:id",
+//   authenticateToken, // Middleware d'authentification
+//   AttributionUssdController.updateUssdAttribution
+// );
+
+// router.delete(
+//   "/delete-ussd/:id",
+//   authenticateToken, // Middleware d'authentification
+//   AttributionUssdController.deleteUssdAttribution
+// );
+
+router.get("/ussdsAtribuer", getAllUssdAttributions);
+
+// Route pour libérer un USSD attribué en fonction de son ID
+router.put("/ussdsAtribuer/liberer/:id", libererUssdAttribue);
+
+// Récupérer les historiques d'une attribution
+router.get(
+  "/historiqueUssd/:ussd_attribution_id",
+  authenticateToken,
+  historiqueUSSDAttributionController.getUssdHistoriqueByAttribution
+);
+
+// Appliquer une suspension
+router.post(
+  "/historiqueUssd/suspension",
+  authenticateToken,
+  upload.single("fichier"),
+  historiqueUSSDAttributionController.appliquerUssdSuspension
+);
+
+// Appliquer un retrait
+router.post(
+  "/historiqueUssd/retrait",
+  authenticateToken,
+  upload.single("fichier"),
+  historiqueUSSDAttributionController.appliquerUssdRetrait
+);
+
+// Appliquer une résiliation
+router.post(
+  "/historiqueUssd/resiliation",
+  authenticateToken,
+  upload.single("fichier"),
+  historiqueUSSDAttributionController.appliquerUssdRésiliation
+);
+
+// Appliquer une référence à une modification historique
+router.post(
+  "/historiqueUssd/appliquer-decision/:id",
+  authenticateToken,
+  upload.single("file"),
+  historiqueUSSDAttributionController.assignUssdReference
+);
+router.post(
+  "/ussd/renouvellements",
+  upload.single("fichier"),
+  renewUssdAttribution
+);
+router.get("/ussd/renouvellements", getAllUssdRenouvellement);
+router.get("/ussd/renouvellements/:id", getUssdRenouvellementById);
+
+router.get(
+  "/dashboard/:utilisationId/attributions",
+  dashboardController.getTotalAndRemainingNumbers
+);
+router.get("/dashboard", dashboardController.getAllTotalAndRemainingNumbers);
+
+router.post("/rapport-ussd/", RapportUssdController.createRapportUssd);
+router.get("/rapport-ussd/:id", RapportUssdController.getRapportUssdById);
+router.get("/rapport-ussd/", RapportUssdController.getAllRapportUssds);
+router.get(
+  "/rapport-ussd/attribution/:attribution_id",
+  RapportUssdController.getRapportsUssdByAttribution
+);
+router.put("/rapport-ussd/:id", RapportUssdController.updateRapportUssd);
+router.delete("/rapport-ussd/:id", RapportUssdController.deleteRapportUssd);
 
 module.exports = router;

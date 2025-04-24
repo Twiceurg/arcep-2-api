@@ -283,53 +283,59 @@ const verifierExpirationEtEnvoyerNotifications = async () => {
           const today = moment();
           const diff = moment.duration(dateExpiration.diff(today));
 
-          let message;
-          let timeRemaining;
+          // ✅ Nouvelle condition : on n'envoie que si la décision a expiré OU va expirer dans <= 3 mois
+          if (dateExpiration.isBefore(today) || diff.asMonths() <= 3) {
+            let message;
+            let timeRemaining;
 
-          if (dateExpiration.isBefore(today)) {
-            message = `La décision de type ${decisionToNotify.type_decision} pour la référence ${decisionToNotify.reference_decision} a expiré pour le client ${clientName}. Veuillez procéder au renouvellement.`;
-          } else {
-            if (diff.years() > 0) {
-              timeRemaining = `${diff.years()} an${
-                diff.years() > 1 ? "s" : ""
-              }`;
-            } else if (diff.months() > 0) {
-              timeRemaining = `${diff.months()} mois`;
-            } else if (diff.days() > 0) {
-              timeRemaining = `${diff.days()} jour${
-                diff.days() > 1 ? "s" : ""
-              }`;
+            if (dateExpiration.isBefore(today)) {
+              message = `La décision de type ${decisionToNotify.type_decision} pour la référence ${decisionToNotify.reference_decision} a expiré pour le client ${clientName}. Veuillez procéder au renouvellement.`;
             } else {
-              timeRemaining = `${diff.hours()} heure${
-                diff.hours() > 1 ? "s" : ""
-              }`;
+              if (diff.years() > 0) {
+                timeRemaining = `${diff.years()} an${
+                  diff.years() > 1 ? "s" : ""
+                }`;
+              } else if (diff.months() > 0) {
+                timeRemaining = `${diff.months()} mois`;
+              } else if (diff.days() > 0) {
+                timeRemaining = `${diff.days()} jour${
+                  diff.days() > 1 ? "s" : ""
+                }`;
+              } else {
+                timeRemaining = `${diff.hours()} heure${
+                  diff.hours() > 1 ? "s" : ""
+                }`;
+              }
+
+              message = `La décision de type ${decisionToNotify.type_decision} pour la référence ${decisionToNotify.reference_decision} va expirer dans ${timeRemaining} pour le client ${clientName}. Veuillez procéder au renouvellement.`;
             }
 
-            message = `La décision de type ${decisionToNotify.type_decision} pour la référence ${decisionToNotify.reference_decision} va expirer dans ${timeRemaining} pour le client ${clientName}. Veuillez procéder au renouvellement.`;
+            const decisionType =
+              decisionToNotify.type_decision === "renouvellement"
+                ? "Renouvellement - Action requise"
+                : "Attribution - Action requise";
+
+            const headerMessage = `${decisionType} - Action requise dans ${timeRemaining}`;
+
+            // Envoi des notifications
+            sendEmailNotificationToAllUsers(
+              "Notification de décision",
+              decisionToNotify.reference_decision,
+              decisionToNotify.type_decision,
+              decisionToNotify.date_expiration,
+              headerMessage,
+              clientName
+            );
+            sendNotificationToAllUsers(message);
+
+            console.log(
+              `Notification envoyée pour la référence ${decisionToNotify.reference_decision}`
+            );
+          } else {
+            console.log(
+              `Pas de notification : plus de 3 mois restants pour la décision ${decisionToNotify.reference_decision}`
+            );
           }
-
-          const decisionType =
-            decisionToNotify.type_decision === "renouvellement"
-              ? "Renouvellement - Action requise"
-              : "Attribution - Action requise";
-
-          // Dynamiser l'en-tête avec le temps restant
-          const headerMessage = `${decisionType} - Action requise dans ${timeRemaining}`;
-
-          // Envoi des notifications (email + alert)
-          sendEmailNotificationToAllUsers(
-            "Notification de décision",
-            decisionToNotify.reference_decision,
-            decisionToNotify.type_decision,
-            decisionToNotify.date_expiration,
-            headerMessage, // Passe l'en-tête dynamique
-            clientName
-          );
-          sendNotificationToAllUsers(message);
-
-          console.log(
-            `Notification envoyée pour la référence ${decisionToNotify.reference_decision}`
-          );
         }
       }
     } else {
