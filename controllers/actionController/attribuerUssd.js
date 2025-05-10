@@ -4,6 +4,7 @@ const {
   UssdAttribuer,
   UssdAttributionHistorique,
   AttributionNumero,
+  TypeUtilisation,
   NumeroAttribue,
   Client,
   Utilisation,
@@ -22,6 +23,7 @@ class AttributionUssdController {
       const { client_id, ussd_id, ussd_attribue } = req.body;
 
       const utilisation_id = parseInt(req.body.utilisation_id, 10);
+      const type_utilisation_id = parseInt(req.body.type_utilisation_id, 10);
 
       const ussd = await USSD.findByPk(ussd_id);
       if (!ussd) {
@@ -122,7 +124,8 @@ class AttributionUssdController {
       const attribution = await USSDAttribution.create({
         client_id,
         ussd_id,
-        utilisation_id
+        utilisation_id,
+        type_utilisation_id
       });
 
       const attribs = validNumbers.map((num) => ({
@@ -165,7 +168,17 @@ class AttributionUssdController {
 
   static async getAllUssdAttributions(req, res) {
     try {
-      const { clientId, ussdId, mois, annee, expirer } = req.query;
+      const {
+        clientId,
+        ussdId,
+        mois,
+        renouveler,
+        annee,
+        utilisationId,
+        expirer,
+        startDate: startStr,
+        endDate: endStr
+      } = req.query;
 
       const whereConditions = {};
 
@@ -173,33 +186,40 @@ class AttributionUssdController {
         whereConditions.client_id = clientId;
       }
 
+      if (utilisationId) {
+        whereConditions.utilisation_id = utilisationId;
+      }
+
       if (ussdId) {
         whereConditions.ussd_id = ussdId;
       }
+      let startDate, endDate;
 
-      // Filtre par mois et/ou année sur date_attribution
-      if (mois && annee) {
-        const startDate = new Date(annee, mois - 1, 1); // Premier jour du mois
-        const endDate = new Date(annee, mois, 0); // Dernier jour du mois
-
+      if (startStr && endStr) {
+        startDate = new Date(startStr);
+        endDate = new Date(endStr);
+        whereConditions.date_attribution = {
+          [Op.gte]: startDate,
+          [Op.lte]: endDate
+        };
+      } else if (mois && annee) {
+        startDate = new Date(annee, mois - 1, 1);
+        endDate = new Date(annee, mois, 0);
         whereConditions.date_attribution = {
           [Op.gte]: startDate,
           [Op.lte]: endDate
         };
       } else if (mois) {
-        // Si seulement le mois est fourni
-        const startDate = new Date(new Date().getFullYear(), mois - 1, 1); // Premier jour du mois
-        const endDate = new Date(new Date().getFullYear(), mois, 0); // Dernier jour du mois
-
+        const currentYear = new Date().getFullYear();
+        startDate = new Date(currentYear, mois - 1, 1);
+        endDate = new Date(currentYear, mois, 0);
         whereConditions.date_attribution = {
           [Op.gte]: startDate,
           [Op.lte]: endDate
         };
       } else if (annee) {
-        // Si seulement l'année est fournie
-        const startDate = new Date(annee, 0, 1); // Premier jour de l'année
-        const endDate = new Date(annee, 11, 31); // Dernier jour de l'année
-
+        startDate = new Date(annee, 0, 1);
+        endDate = new Date(annee, 11, 31);
         whereConditions.date_attribution = {
           [Op.gte]: startDate,
           [Op.lte]: endDate
@@ -211,7 +231,11 @@ class AttributionUssdController {
         include: [
           { model: Client },
           { model: UssdAttribuer },
-          { model: USSD },
+          {
+            model: USSD,
+            include: [{ model: Utilisation }]
+          },
+          { model: TypeUtilisation },
           {
             model: UssdDecision,
             order: [["date_attribution", "ASC"]]
@@ -274,20 +298,53 @@ class AttributionUssdController {
           decision_pertinente: decisionPertinente
         };
       });
+      const filtrageActif =
+        utilisationId ||
+        renouveler === "true" ||
+        renouveler === "false" ||
+        expirer === "true" ||
+        expirer === "false" ||
+        mois ||
+        annee ||
+        startStr ||
+        endStr;
 
+      if (filtrageActif) {
+        results = results.filter((attr) => attr.decision_pertinente);
+      }
+
+      if (utilisationId) {
+        const utilIdInt = parseInt(utilisationId, 10);
+        results = results.filter(
+          (attr) => attr.USSD?.Utilisation?.id === utilIdInt
+        );
+      }
+
+      if (renouveler === "true") {
+        results = results.filter(
+          (attr) => attr.decision_pertinente?.type_decision === "renouvellement"
+        );
+      }
       // Filtrage selon expiration si demandé
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       if (expirer === "true") {
-        results = results.filter(
-          (attr) =>
-            !attr.decision_pertinente?.date_expiration ||
-            new Date(attr.decision_pertinente.date_expiration) < new Date()
-        );
+        results = results.filter((attr) => {
+          const exp = attr.decision_pertinente?.date_expiration;
+          if (!exp) return false;
+          const expDate = new Date(exp);
+          expDate.setHours(0, 0, 0, 0);
+          return expDate < today;
+        });
       } else if (expirer === "false") {
-        results = results.filter(
-          (attr) =>
-            attr.decision_pertinente?.date_expiration &&
-            new Date(attr.decision_pertinente.date_expiration) > new Date()
-        );
+        results = results.filter((attr) => {
+          const exp = attr.decision_pertinente?.date_expiration;
+          if (!exp) return false;
+          const expDate = new Date(exp);
+          expDate.setHours(0, 0, 0, 0);
+          return expDate >= today;
+        });
       }
 
       return res.status(200).json(results);
@@ -302,6 +359,7 @@ class AttributionUssdController {
       const { id } = req.params; // ID de l'attribution USSD
       const { client_id, ussd_id, ussd_attribue, motif } = req.body;
       const utilisation_id = parseInt(req.body.utilisation_id, 10);
+      const type_utilisation_id = parseInt(req.body.type_utilisation_id, 10);
       const file = req.file;
 
       // Vérification des données requises
@@ -328,6 +386,10 @@ class AttributionUssdController {
       // Mise à jour de l'attribution si utilisation_id est présent
       if (utilisation_id) {
         attribution.utilisation_id = utilisation_id;
+        await attribution.save();
+      }
+      if (type_utilisation_id) {
+        attribution.type_utilisation_id = type_utilisation_id;
         await attribution.save();
       }
 

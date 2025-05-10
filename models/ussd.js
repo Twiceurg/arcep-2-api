@@ -11,6 +11,8 @@ module.exports = (sequelize, DataTypes) => {
       USSD.hasMany(models.UssdAttribuer, {
         foreignKey: "ussd_id"
       });
+
+      USSD.belongsTo(models.Utilisation, { foreignKey: "utilisation_id" });
     }
   }
   USSD.init(
@@ -26,6 +28,14 @@ module.exports = (sequelize, DataTypes) => {
       bloc_min: {
         type: DataTypes.INTEGER,
         allowNull: false
+      },
+      utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true,
+        references: {
+          model: "Utilisations",
+          key: "id"
+        }
       },
       bloc_max: {
         type: DataTypes.INTEGER,

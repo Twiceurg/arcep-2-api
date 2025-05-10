@@ -1,9 +1,9 @@
-const { USSD ,UssdAttribuers} = require("../../models");
+const { USSD, Utilisation } = require("../../models");
 
 // Fonction pour créer un USSD
 async function createUSSD(req, res) {
   try {
-    const { prefix, length, status } = req.body;
+    const { prefix, length, status, utilisation_id } = req.body;
 
     if (prefix === undefined || length === undefined) {
       return res
@@ -18,6 +18,7 @@ async function createUSSD(req, res) {
       prefix,
       length,
       bloc_min,
+      utilisation_id,
       bloc_max,
       status: status !== undefined ? status : true
     });
@@ -36,7 +37,11 @@ async function createUSSD(req, res) {
 // Fonction pour récupérer tous les USSDs
 async function getAllUSSDs(req, res) {
   try {
-    const ussds = await USSD.findAll();
+    const ussds = await USSD.findAll({
+      include: {
+        model: Utilisation
+      }
+    });
     return res.status(200).json({
       success: true,
       ussds
@@ -51,7 +56,11 @@ async function getUSSDById(req, res) {
   try {
     const { id } = req.params;
 
-    const ussd = await USSD.findByPk(id);
+    const ussd = await USSD.findByPk(id, {
+      include: {
+        model: Utilisation
+      }
+    });
 
     if (!ussd) {
       return res.status(404).json({ message: "USSD non trouvé" });
@@ -70,7 +79,7 @@ async function getUSSDById(req, res) {
 async function updateUSSD(req, res) {
   try {
     const { id } = req.params;
-    const { prefix, length, status } = req.body;
+    const { prefix, length, status, utilisation_id } = req.body;
 
     if (prefix === undefined || length === undefined) {
       return res
@@ -92,6 +101,10 @@ async function updateUSSD(req, res) {
     ussd.bloc_min = bloc_min;
     ussd.bloc_max = bloc_max;
     ussd.status = status !== undefined ? status : ussd.status;
+
+    if (utilisation_id !== undefined) {
+      ussd.utilisation_id = utilisation_id;
+    }
 
     await ussd.save();
 
@@ -156,11 +169,45 @@ async function toggleStatusUSSD(req, res) {
   }
 }
 
+async function getUSSDByUtilisationId(req, res) {
+  try {
+    const { utilisation_id } = req.params;
+
+    // Utilisation de findAll pour récupérer tous les USSDs correspondant à l'utilisation_id
+    const ussd = await USSD.findAll({
+      where: { utilisation_id }, // Filtrage par utilisation_id
+      include: [
+        {
+          model: Utilisation // Inclure les détails de l'utilisation
+        }
+      ]
+    });
+
+    // Si aucun USSD n'est trouvé, renvoyer false
+    if (ussd.length === 0) {
+      return res.status(200).json({ success: false });
+    }
+
+    // Réponse avec les USSDs trouvés
+    return res.status(200).json({
+      success: true,
+      ussd // Renvoie le tableau des USSDs
+    });
+  } catch (error) {
+    console.error(
+      "Erreur lors de la récupération des USSDs par utilisation_id:",
+      error
+    );
+    return res.status(500).json({ message: "Erreur interne du serveur" });
+  }
+}
+
 module.exports = {
   createUSSD,
   getAllUSSDs,
   getUSSDById,
   updateUSSD,
   deleteUSSD,
-  toggleStatusUSSD
+  toggleStatusUSSD,
+  getUSSDByUtilisationId
 };

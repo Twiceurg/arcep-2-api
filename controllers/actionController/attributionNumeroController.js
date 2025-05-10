@@ -3,15 +3,20 @@ const {
   Client,
   Service,
   USSDAttribution,
+  RapportUssd,
   TypeUtilisation,
+  UssdAttributionHistorique,
+  UssdDecision,
   NumeroAttribue,
   AttributionDecision,
+  USSD,
   Utilisation,
   UssdAttribuer,
   Rapport,
   HistoriqueAttribution,
   Renouvellement,
   Category,
+  UssdRenouvellement,
   Pnn,
   HistoriqueAttributionNumero,
   Utilisateur,
@@ -47,6 +52,18 @@ class AttributionNumeroController {
             "Le tableau des numéros attribués est requis et doit être un tableau non vide"
         });
       }
+      // Vérifier les doublons dans le tableau reçu
+      const duplicates = numero_attribue.filter(
+        (item, index) => numero_attribue.indexOf(item) !== index
+      );
+      if (duplicates.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Les numéros suivants sont en double dans votre requête : ${[
+            ...new Set(duplicates)
+          ].join(", ")}`
+        });
+      }
 
       if (!utilisation_id) {
         return res.status(400).json({
@@ -54,6 +71,7 @@ class AttributionNumeroController {
           message: "L'attribution du service attribué est requise"
         });
       }
+      const validNumbers = [];
 
       // Vérifier si le PNN existe
       const pnn = await Pnn.findOne({ where: { id: pnn_id } });
@@ -71,6 +89,7 @@ class AttributionNumeroController {
             message: `Le numéro ${numero} est en dehors de la plage autorisée`
           });
         }
+        validNumbers.push(numero);
       }
 
       const numeroConflicts = await NumeroAttribue.findAll({
@@ -198,10 +217,19 @@ class AttributionNumeroController {
   // 📌 Récupérer toutes les attributions
   static async getAllAttributions(req, res) {
     try {
-      const { utilisationId, serviceId, renouveler, expirer, mois, annee } =
-        req.query;
+      const {
+        utilisationId,
+        serviceId,
+        renouveler,
+        expirer,
+        mois,
+        annee,
+        startDate: startStr,
+        endDate: endStr
+      } = req.query;
 
       const whereConditions = {};
+      let startDate, endDate;
 
       if (utilisationId) {
         whereConditions.utilisation_id = utilisationId;
@@ -211,27 +239,32 @@ class AttributionNumeroController {
         whereConditions["service_id"] = serviceId;
       }
 
-      // Filtre par mois et année basé sur date_attribution
-      if (mois && annee) {
-        const startDate = new Date(annee, mois - 1, 1); // Le premier jour du mois
-        const endDate = new Date(annee, mois, 0); // Le dernier jour du mois
-
+      // ➕ Filtre par startDate et endDate
+      if (startStr && endStr) {
+        startDate = new Date(startStr);
+        endDate = new Date(endStr);
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (mois && annee) {
+        startDate = new Date(annee, mois - 1, 1);
+        endDate = new Date(annee, mois, 0);
         whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
         };
       } else if (annee) {
-        const startDate = new Date(annee, 0, 1); // Le premier jour de l'année
-        const endDate = new Date(annee, 11, 31); // Le dernier jour de l'année
-
+        startDate = new Date(annee, 0, 1);
+        endDate = new Date(annee, 11, 31);
         whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
         };
       } else if (mois) {
-        const startDate = new Date(new Date().getFullYear(), mois - 1, 1); // Premier jour du mois courant de l'année actuelle
-        const endDate = new Date(new Date().getFullYear(), mois, 0); // Dernier jour du mois courant de l'année actuelle
-
+        const currentYear = new Date().getFullYear();
+        startDate = new Date(currentYear, mois - 1, 1);
+        endDate = new Date(currentYear, mois, 0);
         whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
@@ -314,11 +347,34 @@ class AttributionNumeroController {
         const decisionPertinente = getDecisionPertinente(
           attrPlain.AttributionDecisions
         );
+
         return {
           ...attrPlain,
           decision_pertinente: decisionPertinente
         };
       });
+      const filtrageActif =
+        utilisationId ||
+        serviceId ||
+        renouveler === "true" ||
+        renouveler === "false" ||
+        expirer === "true" ||
+        expirer === "false" ||
+        mois ||
+        annee ||
+        startStr ||
+        endStr;
+
+      if (filtrageActif) {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) => attr.decision_pertinente
+        );
+      }
+
+      // // Ensuite, seulement lors du filtrage :
+      // filteredAttributions = filteredAttributions.filter(
+      //   (attr) => attr.decision_pertinente // ici on filtre les `null`
+      // );
 
       if (serviceId) {
         filteredAttributions = filteredAttributions.filter(
@@ -345,18 +401,25 @@ class AttributionNumeroController {
         );
       }
 
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
       if (expirer === "true") {
-        filteredAttributions = filteredAttributions.filter(
-          (attr) =>
-            !attr.decision_pertinente?.date_expiration ||
-            new Date(attr.decision_pertinente.date_expiration) < new Date()
-        );
+        filteredAttributions = filteredAttributions.filter((attr) => {
+          const exp = attr.decision_pertinente.date_expiration;
+          if (!exp) return false; // maintenant on est sûr que la décision existe, donc exp doit exister aussi
+          const expDate = new Date(exp);
+          expDate.setHours(0, 0, 0, 0);
+          return expDate < today;
+        });
       } else if (expirer === "false") {
-        filteredAttributions = filteredAttributions.filter(
-          (attr) =>
-            attr.decision_pertinente?.date_expiration &&
-            new Date(attr.decision_pertinente.date_expiration) > new Date()
-        );
+        filteredAttributions = filteredAttributions.filter((attr) => {
+          const exp = attr.decision_pertinente.date_expiration;
+          if (!exp) return false;
+          const expDate = new Date(exp);
+          expDate.setHours(0, 0, 0, 0);
+          return expDate >= today;
+        });
       }
 
       return res.status(200).json(filteredAttributions);
@@ -368,9 +431,18 @@ class AttributionNumeroController {
 
   static async getAllAttributionsBloc(req, res) {
     try {
-      const { utilisationId, serviceId, expirer, mois, annee } = req.query;
+      const {
+        utilisationId,
+        serviceId,
+        expirer,
+        mois,
+        annee,
+        startDate: startStr,
+        endDate: endStr
+      } = req.query;
 
       const whereConditions = {};
+      let startDate, endDate;
 
       if (utilisationId) {
         whereConditions.utilisation_id = utilisationId;
@@ -380,29 +452,32 @@ class AttributionNumeroController {
         whereConditions["service_id"] = serviceId;
       }
 
-      // Filtre par mois et/ou année sur date_attribution
-      if (mois && annee) {
-        const startDate = new Date(annee, mois - 1, 1); // Premier jour du mois
-        const endDate = new Date(annee, mois, 0); // Dernier jour du mois
-
+      // ➕ Filtre par startDate et endDate
+      if (startStr && endStr) {
+        startDate = new Date(startStr);
+        endDate = new Date(endStr);
         whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
         };
-      } else if (mois) {
-        // Si seulement le mois est fourni
-        const startDate = new Date(new Date().getFullYear(), mois - 1, 1); // Premier jour du mois
-        const endDate = new Date(new Date().getFullYear(), mois, 0); // Dernier jour du mois
-
+      } else if (mois && annee) {
+        startDate = new Date(annee, mois - 1, 1);
+        endDate = new Date(annee, mois, 0);
         whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
         };
       } else if (annee) {
-        // Si seulement l'année est fournie
-        const startDate = new Date(annee, 0, 1); // Premier jour de l'année
-        const endDate = new Date(annee, 11, 31); // Dernier jour de l'année
-
+        startDate = new Date(annee, 0, 1);
+        endDate = new Date(annee, 11, 31);
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (mois) {
+        const currentYear = new Date().getFullYear();
+        startDate = new Date(currentYear, mois - 1, 1);
+        endDate = new Date(currentYear, mois, 0);
         whereConditions.date_attribution = {
           [Sequelize.Op.gte]: startDate,
           [Sequelize.Op.lte]: endDate
@@ -651,7 +726,10 @@ class AttributionNumeroController {
           { model: Client },
           { model: Service },
           { model: TypeUtilisation },
-          { model: Pnn },
+          {
+            model: Pnn,
+            include: [{ model: Utilisation }]
+          },
           { model: NumeroAttribue }
         ]
       });
@@ -972,24 +1050,53 @@ class AttributionNumeroController {
         return res.json({ success: false, message: "Client ID est requis" });
       }
 
+      // Attributions classiques
       const attributions = await AttributionNumero.findAll({
         where: { client_id },
         include: [
           { model: Service },
           { model: TypeUtilisation },
-          { model: Pnn },
+          {
+            model: Pnn,
+            include: [{ model: Utilisation }]
+          },
           { model: NumeroAttribue }
         ]
       });
 
-      if (!attributions || attributions.length === 0) {
+      // Attributions USSD
+      const ussdAttributions = await USSDAttribution.findAll({
+        where: { client_id },
+        include: [
+          { model: Client },
+          { model: USSD, include: [{ model: Utilisation }] },
+          { model: UssdAttribuer },
+
+          { model: TypeUtilisation },
+          { model: RapportUssd },
+          { model: UssdRenouvellement },
+          { model: UssdDecision },
+          { model: UssdAttributionHistorique }
+        ]
+      });
+
+      // Vérifie s’il y a au moins une attribution
+      if (
+        (!attributions || attributions.length === 0) &&
+        (!ussdAttributions || ussdAttributions.length === 0)
+      ) {
         return res.json({
           success: false,
           message: "Aucune attribution trouvée pour ce client"
         });
       }
 
-      return res.json({ success: true, attributions });
+      // Retourne les deux blocs
+      return res.json({
+        success: true,
+        attributionsClassiques: attributions,
+        attributionsUSSD: ussdAttributions
+      });
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });

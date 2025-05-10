@@ -19,6 +19,17 @@ module.exports = {
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
       },
+      type_utilisation_id: {
+        // Correction du nom de la colonne pour cohérence
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "TypeUtilisations", // Correction du nom du modèle cible
+          key: "id"
+        },
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE"
+      },
       utilisation_id: {
         type: Sequelize.INTEGER,
         allowNull: true,

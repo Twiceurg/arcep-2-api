@@ -4,8 +4,11 @@ const {
   Pnn,
   NumeroAttribue,
   Utilisation,
+  UssdDecision,
   AttributionDecision,
-  Client
+  Client,
+  USSD,
+  UssdAttribuer
 } = require("../models");
 
 const getTotalAndRemainingNumbers = async (req, res) => {
@@ -19,15 +22,22 @@ const getTotalAndRemainingNumbers = async (req, res) => {
     console.log("mois:", mois);
     console.log("annee:", annee);
 
+    // Récupérer les PNN
     const pnns = await Pnn.findAll({
       where: { utilisation_id: utilisationId },
       attributes: ["id", "bloc_min", "block_max"]
     });
 
+    // Récupérer les USSD
+    const ussds = await USSD.findAll({
+      where: { utilisation_id: utilisationId },
+      attributes: ["id", "bloc_min", "bloc_max"]
+    });
+
     let start = null;
     let end = null;
 
-    // Cas où startDate et endDate sont fournis
+    // Gestion des dates
     if (startDate && endDate) {
       start = new Date(startDate);
       end = new Date(endDate);
@@ -38,7 +48,6 @@ const getTotalAndRemainingNumbers = async (req, res) => {
         });
       }
     } else if (annee && !mois) {
-      // Si seulement l'année est fournie, on prend l'année entière (1er janvier - 31 décembre)
       const y = parseInt(annee);
       if (isNaN(y)) {
         return res.status(400).json({
@@ -49,8 +58,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       start = new Date(y, 0, 1); // 1er janvier
       end = new Date(y, 11, 31); // 31 décembre
     } else if (annee && mois) {
-      // Si l'année et le mois sont fournis, on prend le début et la fin du mois spécifié
-      const m = parseInt(mois) - 1; // Mois 0-indexé
+      const m = parseInt(mois) - 1;
       const y = parseInt(annee);
       if (isNaN(m) || isNaN(y)) {
         return res.status(400).json({
@@ -61,9 +69,8 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       start = new Date(y, m, 1); // 1er jour du mois
       end = new Date(y, m + 1, 0); // Dernier jour du mois
     } else if (mois && !annee) {
-      // Si seulement le mois est fourni, on prend l'année actuelle et le mois spécifié
-      const m = parseInt(mois) - 1; // Mois 0-indexé
-      const y = new Date().getFullYear(); // Année actuelle
+      const m = parseInt(mois) - 1;
+      const y = new Date().getFullYear();
       if (isNaN(m)) {
         return res.status(400).json({
           success: false,
@@ -74,11 +81,10 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       end = new Date(y, m + 1, 0); // Dernier jour du mois actuel
     }
 
-    console.log("start:", start);
-    console.log("end:", end);
-
+    // Recherche des numéros attribués pour PNN (avec NumeroAttribue)
     const numeroWhere = {
-      statut: { [Op.in]: ["attribue"] }
+      statut: { [Op.in]: ["attribue"] },
+      utilisation_id: utilisationId
     };
 
     if (start && end) {
@@ -87,32 +93,67 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       };
     }
 
-    numeroWhere.utilisation_id = utilisationId;
+    // Récupération des numéros attribués pour les PNN
+    const numerosAttribuesPNN = await NumeroAttribue.findAll({
+      where: numeroWhere
+    });
 
-    const numerosAttribues = await NumeroAttribue.findAll({
+    // Recherche des numéros attribués pour les USSD (avec UssdAttribuer)
+    const numerosAttribuesUSSD = await UssdAttribuer.findAll({
       where: numeroWhere
     });
 
     const allocatedCountMap = {};
-    numerosAttribues.forEach((num) => {
+
+    // Comptabilisation des numéros attribués pour les PNN
+    numerosAttribuesPNN.forEach((num) => {
       allocatedCountMap[num.pnn_id] = (allocatedCountMap[num.pnn_id] || 0) + 1;
+    });
+
+    // Comptabilisation des numéros attribués pour les USSD
+    numerosAttribuesUSSD.forEach((num) => {
+      allocatedCountMap[num.ussd_id] =
+        (allocatedCountMap[num.ussd_id] || 0) + 1;
     });
 
     let totalNumbers = 0;
     let allocatedNumbers = 0;
     const pnnRates = [];
 
+    // Calcul des numéros totaux et attribués pour les PNN
     pnns.forEach((pnn) => {
-      const count = pnn.block_max - pnn.bloc_min + 1;
-      const allocated = allocatedCountMap[pnn.id] || 0;
+      // Vérification si les blocs sont valides avant de procéder
+      const count =
+        pnn.bloc_min && pnn.block_max ? pnn.block_max - pnn.bloc_min + 1 : 0;
+      const allocated = allocatedCountMap[pnn.id] || 0; // Nombre de numéros attribués
 
       totalNumbers += count;
       allocatedNumbers += allocated;
 
-      const occupancyRate = (allocated / count) * 100;
+      const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
 
       pnnRates.push({
-        pnn_id: pnn.id,
+        bloc_id: pnn.id,
+        total_numbers: count,
+        allocated_numbers: allocated,
+        occupancy_rate: occupancyRate.toFixed(2)
+      });
+    });
+
+    // Calcul des numéros totaux et attribués pour les USSD
+    ussds.forEach((ussd) => {
+      // Vérification si les blocs sont valides avant de procéder
+      const count =
+        ussd.bloc_min && ussd.bloc_max ? ussd.bloc_max - ussd.bloc_min + 1 : 0;
+      const allocated = allocatedCountMap[ussd.id] || 0; // Nombre de numéros attribués
+
+      totalNumbers += count;
+      allocatedNumbers += allocated;
+
+      const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
+
+      pnnRates.push({
+        bloc_id: ussd.id,
         total_numbers: count,
         allocated_numbers: allocated,
         occupancy_rate: occupancyRate.toFixed(2)
@@ -132,7 +173,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur :", error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur"
     });
@@ -140,11 +181,30 @@ const getTotalAndRemainingNumbers = async (req, res) => {
 };
 
 // Fonction pour récupérer les décisions associées aux attributions
-const getAttributionDecisions = async (where) => {
+const getAttributionDecisions = async (where = {}) => {
+  // Appliquer un filtre par défaut sur l'année en cours si pas de filtre date_attribution
+  if (!where.date_attribution) {
+    const currentYear = new Date().getFullYear();
+    where.date_attribution = {
+      [Op.gte]: new Date(`${currentYear}-01-01`),
+      [Op.lte]: new Date(`${currentYear}-12-31`)
+    };
+  }
+
+  // Récupérer les décisions d'attribution
   const decisions = await AttributionDecision.findAll({
     where,
-    attributes: ["type_decision", "date_attribution"] // Utilisation de date_attribution au lieu de created_at
+    attributes: ["type_decision", "date_attribution"]
   });
+
+  // Récupérer les décisions USSD
+  const ussdDecisions = await UssdDecision.findAll({
+    where,
+    attributes: ["type_decision", "date_attribution"]
+  });
+
+  // Fusionner les décisions d'attribution et USSD
+  const allDecisions = [...decisions, ...ussdDecisions];
 
   const decisionCount = {
     modification: [],
@@ -157,17 +217,15 @@ const getAttributionDecisions = async (where) => {
     résiliation: []
   };
 
-  decisions.forEach((d) => {
+  // Parcours de toutes les décisions pour les compter par type et date
+  allDecisions.forEach((d) => {
     const type = d.type_decision?.toLowerCase();
-    const date = new Date(d.date_attribution).toLocaleDateString(); // Utilisation de date_attribution pour récupérer la date
+    const date = new Date(d.date_attribution).toLocaleDateString(); // Ex: "24/04/2025"
 
     if (decisionCount.hasOwnProperty(type)) {
-      // Vérification de l'existence de la date dans le tableau et ajout du comptage
-      const existingDate = decisionCount[type].find(
-        (item) => item.date === date
-      );
-      if (existingDate) {
-        existingDate.count++;
+      const existing = decisionCount[type].find((item) => item.date === date);
+      if (existing) {
+        existing.count++;
       } else {
         decisionCount[type].push({ date, count: 1 });
       }
@@ -178,11 +236,13 @@ const getAttributionDecisions = async (where) => {
 };
 
 const getAttributionCoutDecisions = async (where) => {
-  const decisions = await AttributionDecision.findAll({
-    where,
-    attributes: ["type_decision"]
-  });
+  // Requêtes vers les deux tables
+  const [attribDecisions, ussdDecisions] = await Promise.all([
+    AttributionDecision.findAll({ where, attributes: ["type_decision"] }),
+    UssdDecision.findAll({ where, attributes: ["type_decision"] })
+  ]);
 
+  // Structure de comptage initialisée
   const decisionCount = {
     modification: 0,
     reclamation: 0,
@@ -194,16 +254,69 @@ const getAttributionCoutDecisions = async (where) => {
     résiliation: 0
   };
 
-  decisions.forEach((d) => {
-    const type = d.type_decision?.toLowerCase();
+  // Fusion des deux tableaux
+  const allDecisions = [...attribDecisions, ...ussdDecisions];
 
+  // Comptage
+  allDecisions.forEach((d) => {
+    const type = d.type_decision?.toLowerCase();
     if (decisionCount.hasOwnProperty(type)) {
-      // Incrémenter simplement le compteur pour chaque type
       decisionCount[type]++;
     }
   });
 
   return decisionCount;
+};
+
+const getDecisionsByYear = async () => {
+  // Récupérer toutes les décisions d'attribution sans filtrage spécifique
+  const attribDecisions = await AttributionDecision.findAll({
+    attributes: ["type_decision", "date_attribution"]
+  });
+
+  // Récupérer toutes les décisions USSD sans filtrage spécifique
+  const ussdDecisions = await UssdDecision.findAll({
+    attributes: ["type_decision", "date_attribution"]
+  });
+
+  // Combiner les décisions des deux sources dans un seul objet
+  const decisionCountByYear = {};
+
+  const combineDecisions = (decisions) => {
+    decisions.forEach((d) => {
+      const type = d.type_decision?.toLowerCase();
+      const date = new Date(d.date_attribution);
+      const year = date.getFullYear(); // Ex: 2025
+      const month = String(date.getMonth() + 1).padStart(2, "0"); // Ex: "04" pour avril
+      const formattedDate = `${year}-${month}`;
+
+      // Initialiser la structure pour l'année si elle n'existe pas
+      if (!decisionCountByYear[year]) {
+        decisionCountByYear[year] = {
+          modification: 0,
+          reclamation: 0,
+          suspension: 0,
+          attribution: 0,
+          retrait: 0,
+          reservation: 0,
+          renouvellement: 0,
+          résiliation: 0
+        };
+      }
+
+      // Si le type de décision existe, incrémenter le count pour cette année
+      if (decisionCountByYear[year].hasOwnProperty(type)) {
+        decisionCountByYear[year][type]++;
+      }
+    });
+  };
+
+  // Combiner les deux ensembles de décisions (attribDecisions et ussdDecisions)
+  combineDecisions(attribDecisions);
+  combineDecisions(ussdDecisions);
+
+  // Retourner toutes les années dans l'objet `decisionCountByYear`
+  return decisionCountByYear;
 };
 
 const countAttributionNumero = async (where = {}) => {
@@ -261,16 +374,47 @@ const getDecisionPertinente = (decisions) => {
 // Exemple d'une fonction pour récupérer les numéros
 const getNumbers = async (attributionWhere) => {
   try {
-    // Supposons que tu récupères les numéros dans un modèle `NumeroAttribue`
-    const numbers = await NumeroAttribue.findAll({
+    // Si attributionWhere est vide ou non défini, on peut définir des valeurs par défaut pour éviter l'erreur.
+    if (!attributionWhere || Object.keys(attributionWhere).length === 0) {
+      attributionWhere = {}; // Appliquer un filtre par défaut ou tout inclure si vide
+      console.log("Aucun critère spécifié. Filtrage par défaut appliqué.");
+    }
+
+    // Récupération des numéros attribués via NumeroAttribue
+    const numerosAttribuesPNN = await NumeroAttribue.findAll({
       where: attributionWhere,
       attributes: ["id", "pnn_id", "statut", "utilisation_id"] // Ajuste les attributs selon tes besoins
     });
 
-    return numbers;
+    // Récupération des numéros attribués via UssdAttribuer
+    const numerosAttribuesUSSD = await UssdAttribuer.findAll({
+      where: attributionWhere,
+      attributes: ["id", "ussd_id", "statut", "utilisation_id"] // Ajuste les attributs selon tes besoins
+    });
+
+    // Fusionner les résultats des deux modèles dans un seul tableau
+    const allNumbers = [...numerosAttribuesPNN, ...numerosAttribuesUSSD];
+
+    // Si aucun numéro n'est trouvé, afficher un avertissement
+    if (allNumbers.length === 0) {
+      console.warn("Aucun numéro trouvé pour les critères spécifiés.");
+    }
+
+    // Retourner les numéros fusionnés
+    return allNumbers;
   } catch (error) {
-    console.error("Erreur lors de la récupération des numéros : ", error);
-    throw error; // Rejette l'erreur pour qu'elle puisse être gérée par le code appelant
+    // Log de l'erreur pour comprendre ce qui s'est passé
+    console.error(
+      "Erreur lors de la récupération des numéros : ",
+      error.message
+    );
+
+    // Optionnel : inclure les critères dans le message d'erreur pour plus de clarté
+    throw new Error(
+      `Erreur lors de la récupération des numéros avec les critères ${JSON.stringify(
+        attributionWhere
+      )} : ${error.message}`
+    );
   }
 };
 
@@ -287,7 +431,12 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
         }
       ]
     });
+    const ussds = await USSD.findAll({
+      attributes: ["id", "bloc_min", "bloc_max", "utilisation_id"],
+      include: [{ model: Utilisation, attributes: ["id", "nom"] }]
+    });
 
+    const allEntities = [...pnns, ...ussds];
     // === FILTRES ===
     const createdAtWhere = {}; // pour getNumbers
     const dateAttributionWhere = {}; // pour getAttributionDecisions
@@ -299,7 +448,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
 
       // Vérifier que les dates sont valides
       if (isNaN(startDateObj) || isNaN(endDateObj)) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message: "Format de date invalide"
         });
@@ -329,7 +478,9 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       const startOfMonth = new Date(y, m, 1);
       const endOfMonth = new Date(y, m + 1, 0);
 
-      createdAtWhere.date_attribution = { [Op.between]: [startOfMonth, endOfMonth] };
+      createdAtWhere.date_attribution = {
+        [Op.between]: [startOfMonth, endOfMonth]
+      };
       dateAttributionWhere.date_attribution = {
         [Op.between]: [startOfMonth, endOfMonth]
       };
@@ -341,7 +492,9 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       const startOfYear = new Date(y, 0, 1);
       const endOfYear = new Date(y + 1, 0, 0);
 
-      createdAtWhere.date_attribution = { [Op.between]: [startOfYear, endOfYear] };
+      createdAtWhere.date_attribution = {
+        [Op.between]: [startOfYear, endOfYear]
+      };
       dateAttributionWhere.date_attribution = {
         [Op.between]: [startOfYear, endOfYear]
       };
@@ -352,7 +505,9 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       const startOfMonth = new Date(currentYear, m, 1);
       const endOfMonth = new Date(currentYear, m + 1, 0);
 
-      createdAtWhere.date_attribution = { [Op.between]: [startOfMonth, endOfMonth] };
+      createdAtWhere.date_attribution = {
+        [Op.between]: [startOfMonth, endOfMonth]
+      };
       dateAttributionWhere.date_attribution = {
         [Op.between]: [startOfMonth, endOfMonth]
       };
@@ -370,62 +525,108 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       dateAttributionWhere
     );
 
-    const allocatedCountMap = {};
-    numbers.forEach((num) => {
-      allocatedCountMap[num.pnn_id] = (allocatedCountMap[num.pnn_id] || 0) + 1;
-    });
+    const decisionCount = await getAttributionDecisions(dateAttributionWhere);
+    const decisionyears = await getDecisionsByYear();
+
+    // const allocatedCountMap = {};
+    // numbers.forEach((num) => {
+    //   allocatedCountMap[num.pnn_id] = (allocatedCountMap[num.pnn_id] || 0) + 1;
+    // });
 
     const groupedByUtilisation = {};
-    pnns.forEach((pnn) => {
-      const utilisationId = pnn.utilisation_id;
-      const utilisationName = pnn.Utilisation?.nom || "Non défini";
+
+    // Regrouper les entités par utilisation
+    allEntities.forEach((entity) => {
+      const utilisationId = entity.utilisation_id;
+      const utilisationName = entity.Utilisation?.nom || "Non défini";
 
       if (!groupedByUtilisation[utilisationId]) {
         groupedByUtilisation[utilisationId] = {
           nom: utilisationName,
-          pnns: []
+          entities: []
         };
       }
-      groupedByUtilisation[utilisationId].pnns.push(pnn);
+      groupedByUtilisation[utilisationId].entities.push(entity);
+    });
+
+    // Organiser les numéros attribués en fonction des entités
+    const allocatedCountMap = {}; // On doit initialiser cette variable ici pour l'utiliser dans le reste du calcul
+    numbers.forEach((num) => {
+      if (num.pnn_id) {
+        allocatedCountMap[num.pnn_id] =
+          (allocatedCountMap[num.pnn_id] || 0) + 1;
+      }
+      if (num.ussd_id) {
+        allocatedCountMap[num.ussd_id] =
+          (allocatedCountMap[num.ussd_id] || 0) + 1;
+      }
     });
 
     let totalNumbers = 0;
     let allocatedNumbers = 0;
     const utilisationRates = [];
-    const decisionCount = await getAttributionDecisions(dateAttributionWhere);
 
+    // Parcourir les groupes d'entités pour calculer les statistiques
     Object.entries(groupedByUtilisation).forEach(([utilisation_id, group]) => {
       let groupTotalNumbers = 0;
       let groupAllocatedNumbers = 0;
-      const groupPnnRates = [];
+      const groupEntityRates = [];
 
-      group.pnns.forEach((pnn) => {
-        const count = pnn.block_max - pnn.bloc_min + 1;
-        const allocated = allocatedCountMap[pnn.id] || 0;
+      group.entities.forEach((entity) => {
+        // Vérification des valeurs de bloc avant de calculer le total des numéros
+        const blocMin = entity.bloc_min;
+        const blocMax = entity.block_max || entity.bloc_max; // 'block_max' pour PNN, 'bloc_max' pour USSD
+
+        // Calcul du nombre de numéros dans la plage
+        const count =
+          blocMin && blocMax && blocMin <= blocMax ? blocMax - blocMin + 1 : 0; // Si l'une des valeurs est invalide, on met 0 comme valeur
+
+        // Comptabilisation des numéros attribués
+        const allocated = allocatedCountMap[entity.id] || 0;
 
         groupTotalNumbers += count;
         groupAllocatedNumbers += allocated;
 
-        const occupancyRate = (allocated / count) * 100;
+        const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
 
-        groupPnnRates.push({
-          pnn_id: pnn.id,
-          total_numbers: count,
-          allocated_numbers: allocated,
-          occupancy_rate: occupancyRate.toFixed(2),
-          decision: getDecisionPertinente(
-            pnn.NumeroAttribues
-              ? pnn.NumeroAttribues.flatMap((num) => num.Decisions)
-              : []
-          )
-        });
+        // Traitement spécifique pour PNN
+        if (entity.NumeroAttribues) {
+          groupEntityRates.push({
+            entity_id: entity.id,
+            total_numbers: count,
+            allocated_numbers: allocated,
+            occupancy_rate: occupancyRate.toFixed(2),
+            decision: getDecisionPertinente(
+              entity.NumeroAttribues
+                ? entity.NumeroAttribues.flatMap((num) => num.Decisions)
+                : []
+            )
+          });
+        }
+
+        // Traitement spécifique pour USSD
+        if (entity.UssdAttribuer) {
+          groupEntityRates.push({
+            entity_id: entity.id,
+            total_numbers: count,
+            allocated_numbers: allocated,
+            occupancy_rate: occupancyRate.toFixed(2),
+            decision: getDecisionPertinente(
+              entity.UssdAttribuer
+                ? entity.UssdAttribuer.flatMap((num) => num.Decisions)
+                : []
+            )
+          });
+        }
       });
 
       totalNumbers += groupTotalNumbers;
       allocatedNumbers += groupAllocatedNumbers;
 
       const groupOccupancyRate =
-        (groupAllocatedNumbers / groupTotalNumbers) * 100;
+        groupTotalNumbers > 0
+          ? (groupAllocatedNumbers / groupTotalNumbers) * 100
+          : 0;
 
       utilisationRates.push({
         utilisation_id,
@@ -434,7 +635,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
         allocated_numbers: groupAllocatedNumbers,
         remaining_numbers: groupTotalNumbers - groupAllocatedNumbers,
         occupancy_rate: groupOccupancyRate.toFixed(2),
-        pnn_rates: groupPnnRates
+        entity_rates: groupEntityRates
       });
     });
 
@@ -447,10 +648,11 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       startOfPreviousMonth,
       endOfPreviousMonth;
 
-    if (mois && annee) {
-      const m = parseInt(mois) - 1;
-      const y = parseInt(annee);
+    // Convertir les dates éventuelles si fournies dans la requête
+    const m = mois ? parseInt(mois) - 1 : null;
+    const y = annee ? parseInt(annee) : null;
 
+    if (mois && annee) {
       if (isNaN(m) || isNaN(y)) {
         return res
           .status(400)
@@ -458,64 +660,60 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       }
 
       startOfCurrentMonth = new Date(y, m, 1);
-      endOfCurrentMonth = new Date(y, m + 1, 0);
+      endOfCurrentMonth = new Date(y, m + 1, 1); // exclusif
       startOfPreviousMonth = new Date(y, m - 1, 1);
-      endOfPreviousMonth = new Date(y, m, 0);
+      endOfPreviousMonth = new Date(y, m, 1); // exclusif
     } else if (mois && !annee) {
-      const m = parseInt(mois) - 1;
-
       if (isNaN(m)) {
         return res
           .status(400)
           .json({ success: false, message: "Mois invalide" });
       }
 
-      startOfCurrentMonth = new Date(now.getFullYear(), m, 1);
-      endOfCurrentMonth = new Date(now.getFullYear(), m + 1, 0);
-      startOfPreviousMonth = new Date(now.getFullYear(), m - 1, 1);
-      endOfPreviousMonth = new Date(now.getFullYear(), m, 0);
+      const year = now.getFullYear();
+      startOfCurrentMonth = new Date(year, m, 1);
+      endOfCurrentMonth = new Date(year, m + 1, 1);
+      startOfPreviousMonth = new Date(year, m - 1, 1);
+      endOfPreviousMonth = new Date(year, m, 1);
     } else if (!mois && annee) {
-      const y = parseInt(annee);
-
       if (isNaN(y)) {
-        return res
-          .status(400)
+        return res 
           .json({ success: false, message: "Année invalide" });
       }
 
       startOfCurrentMonth = new Date(y, 0, 1);
-      endOfCurrentMonth = new Date(y + 1, 0, 0);
+      endOfCurrentMonth = new Date(y + 1, 0, 1);
       startOfPreviousMonth = new Date(y - 1, 0, 1);
-      endOfPreviousMonth = new Date(y, 0, 0);
+      endOfPreviousMonth = new Date(y, 0, 1);
     } else if (startDate && endDate) {
       const start = new Date(startDate);
       const end = new Date(endDate);
 
-      if (isNaN(start) || isNaN(end)) {
-        return res
-          .status(400)
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res 
           .json({ success: false, message: "Format de date invalide" });
       }
 
       startOfCurrentMonth = new Date(start.getFullYear(), start.getMonth(), 1);
-      endOfCurrentMonth = new Date(end.getFullYear(), end.getMonth() + 1, 0);
+      endOfCurrentMonth = new Date(end.getFullYear(), end.getMonth() + 1, 1);
       startOfPreviousMonth = new Date(
         start.getFullYear(),
         start.getMonth() - 1,
         1
       );
-      endOfPreviousMonth = new Date(start.getFullYear(), start.getMonth(), 0);
+      endOfPreviousMonth = new Date(start.getFullYear(), start.getMonth(), 1);
     } else {
       startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      endOfCurrentMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
       startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+      endOfPreviousMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     }
 
     const currentMonthCount = await Client.count({
       where: {
         created_at: {
-          [Op.between]: [startOfCurrentMonth, endOfCurrentMonth]
+          [Op.gte]: startOfCurrentMonth,
+          [Op.lt]: endOfCurrentMonth
         }
       }
     });
@@ -523,7 +721,8 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
     const previousMonthCount = await Client.count({
       where: {
         created_at: {
-          [Op.between]: [startOfPreviousMonth, endOfPreviousMonth]
+          [Op.gte]: startOfPreviousMonth,
+          [Op.lt]: endOfPreviousMonth
         }
       }
     });
@@ -543,6 +742,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
         decision_data: decisionCount, // Ajout des données pour le graphique
         attribution_numero: attributionNumeroCount,
         attribution_count: attributionDecisionCount,
+        yearsdecision: decisionyears,
         clients: {
           currentMonth: currentMonthCount,
           previousMonth: previousMonthCount,
@@ -552,7 +752,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching all dashboard data:", error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    return res.json({ success: false, message: "Server error" });
   }
 };
 

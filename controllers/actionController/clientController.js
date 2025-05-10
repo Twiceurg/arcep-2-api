@@ -4,6 +4,12 @@ class ClientController {
   // 📌 Créer un client
   static async createClient(req, res) {
     try {
+      // Remplacer les chaînes vides par null
+      const cleanData = {};
+      for (const key in req.body) {
+        cleanData[key] = req.body[key] === "" ? null : req.body[key];
+      }
+
       const {
         denomination,
         adresse_siege,
@@ -13,17 +19,18 @@ class ClientController {
         telephone_morale,
         email_morale,
         activite
-      } = req.body;
+      } = cleanData;
 
       // Vérifier si le client existe déjà (via l'email ou la dénomination)
-      const existingClient = await Client.findOne({
-        where: {
-          email_morale
+      if (email_morale) {
+        const existingClient = await Client.findOne({
+          where: { email_morale }
+        });
+        if (existingClient) {
+          return res
+            .status(400)
+            .json({ message: "Un client avec cet email existe déjà." });
         }
-      });
-
-      if (existingClient) {
-        return res.status(400).json({ message: "Un client avec cet email existe déjà." });
       }
 
       // Création du client
@@ -74,9 +81,7 @@ class ClientController {
     try {
       const { id } = req.params;
       const client = await Client.findByPk(id, {
-        include: [
-          { model: AttributionNumero }
-        ]
+        include: [{ model: AttributionNumero }]
       });
 
       if (!client) {
@@ -97,6 +102,13 @@ class ClientController {
   static async updateClient(req, res) {
     try {
       const { id } = req.params;
+
+      // Remplacer les chaînes vides par null
+      const cleanData = {};
+      for (const key in req.body) {
+        cleanData[key] = req.body[key] === "" ? null : req.body[key];
+      }
+
       const {
         denomination,
         adresse_siege,
@@ -106,13 +118,13 @@ class ClientController {
         telephone_morale,
         email_morale,
         activite
-      } = req.body;
- 
+      } = cleanData;
+
       const client = await Client.findByPk(id);
       if (!client) {
         return res.status(404).json({ message: "Client non trouvé" });
       }
- 
+
       client.denomination = denomination;
       client.adresse_siege = adresse_siege;
       client.nom_representant_legal = nom_representant_legal;
@@ -139,17 +151,21 @@ class ClientController {
   static async deleteClient(req, res) {
     try {
       const { id } = req.params;
- 
+
       const client = await Client.findByPk(id);
       if (!client) {
         return res.status(404).json({ message: "Client non trouvé" });
       }
 
       await client.destroy();
-      return res.status(200).json({ success: true, message: "Client supprimé avec succès" });
+      return res
+        .status(200)
+        .json({ success: true, message: "Client supprimé avec succès" });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ success: flase, message: "Erreur interne du serveur" });
+      return res
+        .status(500)
+        .json({ success: flase, message: "Erreur interne du serveur" });
     }
   }
 }

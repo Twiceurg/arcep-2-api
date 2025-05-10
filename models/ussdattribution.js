@@ -11,6 +11,10 @@ module.exports = (sequelize, DataTypes) => {
       USSDAttribution.belongsTo(models.USSD, {
         foreignKey: "ussd_id"
       });
+
+      USSDAttribution.belongsTo(models.TypeUtilisation, {
+        foreignKey: "type_utilisation_id"
+      });
       USSDAttribution.belongsTo(models.Client, {
         foreignKey: "client_id"
       });
@@ -55,6 +59,10 @@ module.exports = (sequelize, DataTypes) => {
         },
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
+      },
+      type_utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
       },
       utilisation_id: {
         type: DataTypes.INTEGER,

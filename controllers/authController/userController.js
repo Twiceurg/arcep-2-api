@@ -1,6 +1,8 @@
 const bcrypt = require("bcrypt");
 const { Utilisateur } = require("../../models");
 const hashPassword = require("../../utils/hashPassword");
+const { authenticateAndFetchLDAPUser } = require("../../services/ldapService");
+const { getLdapUserByUsername } = require("./ldapController");
 
 const getAllUsers = async (req, res) => {
   try {
@@ -22,52 +24,110 @@ const getAllUsers = async (req, res) => {
 };
 
 // Création d'un utilisateur
-const createUser = async (req, res) => {
-  const { nom, prenom, role, username, email } = req.body;
+const ajouterUtilisateurLDAP = async (req, res) => {
+  const { username, nom, prenom, email, role } = req.body;
+  const password = '1234567890'; // Le mot de passe par défaut
+
+  if (!username || !nom || !prenom || !email || !role) {
+    return res.status(400).json({
+      success: false,
+      message: "Tous les champs sont requis."
+    });
+  }
 
   try {
-    // Vérifier si l'email ou le nom d'utilisateur existe déjà
-    const existingUser = await Utilisateur.findOne({
-      where: {
-        [Sequelize.Op.or]: [{ email }, { username }]
-      }
-    });
+    // Authentifie l'utilisateur via LDAP et récupère ses informations
+    const ldapUser = await getLdapUserByUsername(username); // Remplace par ta logique LDAP pour obtenir l'utilisateur
 
-    if (existingUser) {
-      return res.status(400).json({
+    if (!ldapUser) {
+      return res.json({
         success: false,
-        message: "Nom d'utilisateur ou email déjà utilisé."
+        message: "Utilisateur non trouvé dans LDAP."
       });
     }
 
-    // Mot de passe par défaut
-    const defaultPassword = "Togo@21!";
+    // Vérifie si l'utilisateur existe déjà en base de données
+    const utilisateurExist = await Utilisateur.findOne({ where: { username } });
+    if (utilisateurExist) {
+      return res.json({
+        success: false,
+        message: "Utilisateur déjà existant dans la base."
+      });
+    }
 
-    // Hashage du mot de passe par défaut
-    const hashedPassword = await hashPassword(defaultPassword);
+    // Hachage du mot de passe
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Création de l'utilisateur
-    const newUser = await Utilisateur.create({
-      nom,
-      prenom,
-      role,
+    // Création de l'utilisateur dans la base de données
+    const nouvelUtilisateur = await Utilisateur.create({
       username,
+      nom: ldapUser.nom || nom,  // Utilise les données LDAP ou celles fournies
+      prenom: ldapUser.prenom || prenom,
+      email: ldapUser.email || email,
+      role,
       password: hashedPassword,
-      email,
       etat_compte: true,
       premiere_connexion: true
     });
 
     return res.status(201).json({
       success: true,
-      message: "Utilisateur créé avec succès.",
-      data: newUser
+      message: "Utilisateur LDAP ajouté avec succès.",
+      user: {
+        id: nouvelUtilisateur.id,
+        username: nouvelUtilisateur.username,
+        email: nouvelUtilisateur.email
+      }
     });
-  } catch (error) {
-    console.error(error);
+  } catch (err) {
+    console.error(err.message);
     return res.status(500).json({
       success: false,
-      message: "Erreur serveur lors de la création de l'utilisateur."
+      message: "Erreur serveur lors de l'ajout de l'utilisateur LDAP."
+    });
+  }
+};
+
+
+const changeUserRole = async (req, res) => {
+  const { userId } = req.params; // ID de l'utilisateur à modifier
+  const { role } = req.body;     // Nouveau rôle à affecter
+
+  // Vérifier que le rôle est fourni et non vide
+  if (!role || typeof role !== "string" || role.trim() === "") {
+    return res.status(400).json({
+      success: false,
+      message: "Le rôle doit être une chaîne de caractères non vide."
+    });
+  }
+
+  try {
+    // Trouver l'utilisateur par son ID
+    const utilisateur = await Utilisateur.findByPk(userId);
+
+    if (!utilisateur) {
+      return res.status(404).json({
+        success: false,
+        message: "Utilisateur non trouvé."
+      });
+    }
+
+    // Mettre à jour le rôle de l'utilisateur
+    utilisateur.role = role.trim();
+
+    // Sauvegarder les modifications
+    await utilisateur.save();
+
+    return res.status(200).json({
+      success: true,
+      message: `Rôle de l'utilisateur modifié en ${role}.`,
+      data: utilisateur
+    });
+  } catch (error) {
+    console.error("Erreur lors de la modification du rôle :", error);
+    return res.status(500).json({
+      success: false,
+      message: "Erreur serveur lors de la mise à jour du rôle de l'utilisateur."
     });
   }
 };
@@ -101,74 +161,13 @@ const deleteUser = async (req, res) => {
   }
 };
 
-// Modification d'un utilisateur
-const updateUser = async (req, res) => {
-  const { id } = req.params;
-  const { nom, prenom, role, username, password, email, etat_compte } =
-    req.body;
-
-  try {
-    const user = await Utilisateur.findByPk(id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "Utilisateur non trouvé."
-      });
-    }
-
-    // Vérifier si l'email ou le nom d'utilisateur est déjà pris (sauf pour l'utilisateur actuel)
-    const existingUser = await Utilisateur.findOne({
-      where: {
-        [Sequelize.Op.or]: [{ email }, { username }],
-        id: { [Sequelize.Op.ne]: id } // S'assurer que l'ID n'est pas celui de l'utilisateur actuel
-      }
-    });
-
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "Nom d'utilisateur ou email déjà utilisé."
-      });
-    }
-
-    // Si un mot de passe est fourni, hashage du nouveau mot de passe
-    let updatedData = {
-      nom,
-      prenom,
-      role,
-      username,
-      email,
-      etat_compte: etat_compte || true
-    };
-
-    if (password) {
-      updatedData.password = await bcrypt.hash(password, 10);
-    }
-
-    await user.update(updatedData);
-
-    return res.status(200).json({
-      success: true,
-      message: "Utilisateur mis à jour avec succès.",
-      data: user
-    });
-  } catch (error) {
-    console.error(error);
-    return res.status(500).json({
-      success: false,
-      message: "Erreur serveur lors de la mise à jour de l'utilisateur."
-    });
-  }
-};
-
 const toggleUserStatus = async (req, res) => {
   const { userId } = req.params; // L'ID de l'utilisateur à modifier
   const { status } = req.body; // Le statut à définir (true pour activer, false pour désactiver)
 
   // Vérification si le statut est bien un boolean
   if (status === undefined || typeof status !== "boolean") {
-    return res.status(400).json({
+    return res.json({
       success: false,
       message: "Le statut doit être un boolean (true ou false)."
     });
@@ -179,7 +178,7 @@ const toggleUserStatus = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(userId);
 
     if (!utilisateur) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         message: "Utilisateur non trouvé."
       });
@@ -191,65 +190,18 @@ const toggleUserStatus = async (req, res) => {
     // Sauvegarder les modifications
     await utilisateur.save();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: `Utilisateur ${status ? "activé" : "désactivé"} avec succès.`,
       data: utilisateur
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message:
         "Erreur serveur lors de la mise à jour du statut de l'utilisateur."
     });
-  }
-};
-
-const changerMotDePasse = async (req, res) => {
-  const { utilisateurId } = req.params;
-  const { ancienMotDePasse, nouveauMotDePasse } = req.body;
-
-  try {
-    // Récupérer l'utilisateur
-    const utilisateur = await Utilisateur.findByPk(utilisateurId);
-
-    if (!utilisateur) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
-    }
-
-    // Vérification de l'ancien mot de passe
-    const motDePasseValide = await bcrypt.compare(
-      ancienMotDePasse,
-      utilisateur.password
-    );
-
-    if (!motDePasseValide) {
-      return res
-        .status(400)
-        .json({ message: "Ancien mot de passe incorrect." });
-    }
-
-    // Hasher le nouveau mot de passe
-    const motDePasseHash = await hashPassword(nouveauMotDePasse);
-
-    // Mise à jour du mot de passe et de l'indicateur de changement
-    utilisateur.password = motDePasseHash;
-    utilisateur.premiere_connexion = false; // Marquer que le mot de passe a été changé
-
-    // Sauvegarder les changements
-    await utilisateur.save();
-
-    return res
-      .status(200)
-      .json({ message: "Mot de passe modifié avec succès." });
-  } catch (error) {
-    console.error("Erreur lors du changement de mot de passe :", error);
-    return res
-      .status(500)
-      .json({
-        message: "Erreur serveur lors de la modification du mot de passe."
-      });
   }
 };
 
@@ -283,11 +235,9 @@ const resetPassword = async (req, res) => {
       "Erreur lors de la réinitialisation du mot de passe :",
       error
     );
-    return res
-      .status(500)
-      .json({
-        message: "Erreur serveur lors de la réinitialisation du mot de passe."
-      });
+    return res.status(500).json({
+      message: "Erreur serveur lors de la réinitialisation du mot de passe."
+    });
   }
 };
 
@@ -315,18 +265,18 @@ const getUserDetails = async (req, res) => {
     console.error(error);
     return res.status(500).json({
       success: false,
-      message: "Erreur serveur lors de la récupération des détails de l'utilisateur."
+      message:
+        "Erreur serveur lors de la récupération des détails de l'utilisateur."
     });
   }
 };
 
 module.exports = {
   getAllUsers,
-  updateUser,
   deleteUser,
-  createUser,
+  ajouterUtilisateurLDAP,
   toggleUserStatus,
-  changerMotDePasse,
   resetPassword,
-  getUserDetails
+  getUserDetails,
+  changeUserRole
 };

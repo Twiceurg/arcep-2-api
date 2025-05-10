@@ -20,7 +20,7 @@ const storage = multer.diskStorage({
 // Limiter les types de fichiers et la taille
 const upload = multer({
   storage: storage,
-  limits: { fileSize: 5 * 1024 * 1024 }, // Limite à 5MB
+  limits: { fileSize: 50 * 1024 * 1024 }, // Limite à 15MB
   fileFilter: (req, file, cb) => {
     // Accepter uniquement les fichiers PDF et Word (DOCX)
     if (file.mimetype === 'application/pdf' || file.mimetype === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
