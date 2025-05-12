@@ -26,12 +26,13 @@ const getAllUsers = async (req, res) => {
 // Création d'un utilisateur
 const ajouterUtilisateurLDAP = async (req, res) => {
   const { username, nom, prenom, email, role } = req.body;
-  const password = '1234567890'; // Le mot de passe par défaut
+  const password = "1234567890"; // Le mot de passe par défaut
 
-  if (!username || !nom || !prenom || !email || !role) {
-    return res.status(400).json({
+  // Si nom, prénom, et rôle sont présents, vérifier uniquement ceux-là
+  if (!username || !nom || !prenom || !role) {
+    return res.json({
       success: false,
-      message: "Tous les champs sont requis."
+      message: "Tous les champs obligatoires sont requis."
     });
   }
 
@@ -45,6 +46,9 @@ const ajouterUtilisateurLDAP = async (req, res) => {
         message: "Utilisateur non trouvé dans LDAP."
       });
     }
+
+    // Si l'email n'est pas fourni, on le génère à partir du nom d'utilisateur ou d'autres données
+    const utilisateurEmail = email || ldapUser.email || `${username}@exemple.com`;
 
     // Vérifie si l'utilisateur existe déjà en base de données
     const utilisateurExist = await Utilisateur.findOne({ where: { username } });
@@ -61,16 +65,16 @@ const ajouterUtilisateurLDAP = async (req, res) => {
     // Création de l'utilisateur dans la base de données
     const nouvelUtilisateur = await Utilisateur.create({
       username,
-      nom: ldapUser.nom || nom,  // Utilise les données LDAP ou celles fournies
+      nom: ldapUser.nom || nom, // Utilise les données LDAP ou celles fournies
       prenom: ldapUser.prenom || prenom,
-      email: ldapUser.email || email,
+      email: utilisateurEmail, // Utilise l'email généré ou celui de LDAP
       role,
       password: hashedPassword,
       etat_compte: true,
       premiere_connexion: true
     });
 
-    return res.status(201).json({
+    return res.json({
       success: true,
       message: "Utilisateur LDAP ajouté avec succès.",
       user: {
@@ -81,7 +85,7 @@ const ajouterUtilisateurLDAP = async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur lors de l'ajout de l'utilisateur LDAP."
     });
@@ -91,11 +95,11 @@ const ajouterUtilisateurLDAP = async (req, res) => {
 
 const changeUserRole = async (req, res) => {
   const { userId } = req.params; // ID de l'utilisateur à modifier
-  const { role } = req.body;     // Nouveau rôle à affecter
+  const { role } = req.body; // Nouveau rôle à affecter
 
   // Vérifier que le rôle est fourni et non vide
   if (!role || typeof role !== "string" || role.trim() === "") {
-    return res.status(400).json({
+    return res.json({
       success: false,
       message: "Le rôle doit être une chaîne de caractères non vide."
     });
@@ -125,7 +129,7 @@ const changeUserRole = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur lors de la modification du rôle :", error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur lors de la mise à jour du rôle de l'utilisateur."
     });
@@ -140,7 +144,7 @@ const deleteUser = async (req, res) => {
     const user = await Utilisateur.findByPk(id);
 
     if (!user) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         message: "Utilisateur non trouvé."
       });
@@ -154,7 +158,7 @@ const deleteUser = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur lors de la suppression de l'utilisateur."
     });
