@@ -28,6 +28,10 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       attributes: ["id", "bloc_min", "block_max"]
     });
 
+    const utilisation = await Utilisation.findByPk(utilisationId);
+
+    const nom = utilisation.nom;
+
     // Récupérer les USSD
     const ussds = await USSD.findAll({
       where: { utilisation_id: utilisationId },
@@ -165,6 +169,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
     return res.json({
       success: true,
       data: {
+        nom: nom,
         total_numbers: totalNumbers,
         allocated_numbers: allocatedNumbers,
         remaining_numbers: remainingNumbers,
@@ -677,8 +682,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       endOfPreviousMonth = new Date(year, m, 1);
     } else if (!mois && annee) {
       if (isNaN(y)) {
-        return res 
-          .json({ success: false, message: "Année invalide" });
+        return res.json({ success: false, message: "Année invalide" });
       }
 
       startOfCurrentMonth = new Date(y, 0, 1);
@@ -690,8 +694,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       const end = new Date(endDate);
 
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return res 
-          .json({ success: false, message: "Format de date invalide" });
+        return res.json({ success: false, message: "Format de date invalide" });
       }
 
       startOfCurrentMonth = new Date(start.getFullYear(), start.getMonth(), 1);

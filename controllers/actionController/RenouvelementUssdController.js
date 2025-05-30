@@ -6,7 +6,7 @@ const {
 
 const renewUssdAttribution = async (req, res) => {
   try {
-    const { ussd_attribution_id, decision_renouvellement, date_attribution } =
+    const { ussd_attribution_id, decision_renouvellement, date_renouvellement } =
       req.body;
     const file = req.file;
 
@@ -19,8 +19,8 @@ const renewUssdAttribution = async (req, res) => {
       return res.status(400).json({ message: "La référence est requise" });
     }
 
-    const attributionDate = date_attribution
-      ? new Date(date_attribution)
+    const attributionDate = date_renouvellement
+      ? new Date(date_renouvellement)
       : new Date();
 
     // 🔍 Récupérer la décision initiale pour cette attribution

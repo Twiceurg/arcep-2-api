@@ -1,7 +1,5 @@
-'use strict';
-const {
-  Model
-} = require('sequelize');
+"use strict";
+const { Model } = require("sequelize");
 module.exports = (sequelize, DataTypes) => {
   class Notification extends Model {
     /**
@@ -11,43 +9,46 @@ module.exports = (sequelize, DataTypes) => {
      */
     static associate(models) {
       Notification.belongsTo(models.Utilisateur, {
-        foreignKey: 'user_id' 
+        foreignKey: "user_id"
       });
     }
   }
-  Notification.init({
-    message: {
-      type: DataTypes.STRING,
-      allowNull: false,  
+  Notification.init(
+    {
+      message: {
+        type: DataTypes.STRING,
+        allowNull: false
+      },
+      user_id: {
+        type: DataTypes.INTEGER,
+        allowNull: false
+      },
+      type: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+      read: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      created_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      },
+      updated_at: {
+        type: DataTypes.DATE,
+        allowNull: false,
+        defaultValue: DataTypes.NOW
+      }
     },
-    user_id: {  
-      type: DataTypes.INTEGER,
-      allowNull: false,  
-    },
-    type: {
-      type: DataTypes.STRING,
-      allowNull: true,  
-    },
-    read: {
-      type: DataTypes.BOOLEAN,
-      defaultValue: false,  
-    },
-    created_at: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,  
-    },
-    updated_at: {
-      type: DataTypes.DATE,
-      allowNull: false,
-      defaultValue: DataTypes.NOW,  
-    },
-  }, {
-    sequelize,
-    modelName: 'Notification',
-    tableName: 'Notifications',  
-    underscored: true,  
-    timestamps: false,  
-  });
+    {
+      sequelize,
+      modelName: "Notification",
+      tableName: "Notifications",
+      underscored: true,
+      timestamps: false
+    }
+  );
   return Notification;
 };

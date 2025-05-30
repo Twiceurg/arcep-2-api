@@ -77,9 +77,12 @@ const RenouvellementController = {
 
   async renewAttribution(req, res) {
     try {
-      const { attribution_id, decision_renouvellement, date_attribution } =
+      const { attribution_id, decision_renouvellement, date_renouvellement } =
         req.body;
       const file = req.file;
+
+      console.log("Date reçue depuis req.body.date_renouvellement :", date_renouvellement);
+
 
       const attribution = await AttributionNumero.findByPk(attribution_id, {
         include: [{ model: Service, include: [{ model: Category }] }]
@@ -98,8 +101,8 @@ const RenouvellementController = {
         return res.status(400).json({ message: "La référence est requise" });
       }
 
-      const attributionDate = date_attribution
-        ? new Date(date_attribution)
+      const attributionDate = date_renouvellement
+        ? new Date(date_renouvellement)
         : new Date();
 
       let dateExpiration = null;
