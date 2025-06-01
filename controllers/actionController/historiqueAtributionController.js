@@ -5,8 +5,14 @@ const {
   NumeroAttribue,
   AttributionDecision,
   Service,
-  Category
+  Category,
+  Client,
+  TypeUtilisation,
+  Utilisation,
+  Rapport,
+  Pnn
 } = require("../../models");
+const { Op } = require("sequelize");
 
 const historiqueAttributionController = {
   /**
@@ -26,8 +32,21 @@ const historiqueAttributionController = {
       const historique = await HistoriqueAttribution.findAll({
         where: { attribution_id },
         include: [
+          { model: Utilisateur },
           {
-            model: Utilisateur
+            model: AttributionNumero,
+            include: [
+              { model: Client },
+              { model: Utilisation },
+
+              { model: TypeUtilisation },
+              {
+                model: Pnn,
+                include: [{ model: Utilisation }]
+              },
+              { model: NumeroAttribue },
+              { model: Rapport }
+            ]
           }
         ],
         order: [["created_at", "DESC"]]
@@ -218,9 +237,17 @@ const historiqueAttributionController = {
   async assignReference(req, res) {
     try {
       const { id } = req.params;
-      const { reference_decision, date_attribution, duree_utilisation } =
-        req.body;
+      const {
+        reference_decision,
+        date_attribution,
+        duree_utilisation,
+        numeros_selectionnes
+      } = req.body;
       const file = req.file;
+
+      console.log("Type de numeros_selectionnes:", typeof numeros_selectionnes);
+      console.log("Est-ce un tableau ?", Array.isArray(numeros_selectionnes));
+      console.log("Contenu:", numeros_selectionnes);
 
       // Vérifier si l'historique existe
       const historique = await HistoriqueAttribution.findByPk(id, {
@@ -229,6 +256,31 @@ const historiqueAttributionController = {
 
       if (!historique) {
         return res.status(404).json({ message: "Historique non trouvé" });
+      }
+
+      // On s'assure que numerosAffectes est bien un tableau
+      let numerosAffectes = [];
+      if (typeof numeros_selectionnes === "string") {
+        try {
+          numerosAffectes = JSON.parse(numeros_selectionnes);
+          if (!Array.isArray(numerosAffectes)) {
+            return res
+              .status(400)
+              .json({ message: "Format des numéros sélectionnés invalide" });
+          }
+        } catch {
+          return res
+            .status(400)
+            .json({ message: "Format des numéros sélectionnés invalide" });
+        }
+      } else if (Array.isArray(numeros_selectionnes)) {
+        numerosAffectes = numeros_selectionnes;
+      } else {
+        return res
+          .status(400)
+          .json({
+            message: "Les numéros sélectionnés doivent être un tableau"
+          });
       }
 
       const attribution = historique.AttributionNumero; // L'attribution associée à l'historique
@@ -245,18 +297,25 @@ const historiqueAttributionController = {
         await historique.save();
 
         // Mise à jour du statut du numéro attribué
-        const numeroAttribue = await NumeroAttribue.findOne({
-          where: { attribution_id: attribution.id }
+        const numeroAttribue = await NumeroAttribue.findAll({
+          where: {
+            attribution_id: attribution.id,
+            numero_attribue: {
+              [Op.in]: numerosAffectes
+            }
+          }
         });
 
-        if (!numeroAttribue) {
+        if (!numeroAttribue || numeroAttribue.length === 0) {
           return res
             .status(404)
             .json({ message: "Numéro attribué non trouvé" });
         }
 
-        numeroAttribue.statut = status;
-        await numeroAttribue.save();
+        for (const numero of numeroAttribue) {
+          numero.statut = status;
+          await numero.save();
+        }
 
         // Créer une décision
         const attributionDecision = await AttributionDecision.create({
@@ -354,21 +413,29 @@ const historiqueAttributionController = {
       }
 
       // Modifier le statut du numéro attribué
-      const numeroAttribue = await NumeroAttribue.findOne({
-        where: { attribution_id: attribution.id }
+      const numeroAttribue = await NumeroAttribue.findAll({
+        where: {
+          attribution_id: attribution.id,
+          numero_attribue: {
+            [Op.in]: numerosAffectes
+          }
+        }
       });
 
-      if (!numeroAttribue) {
+      if (!numeroAttribue || numeroAttribue.length === 0) {
         return res.status(404).json({ message: "Numéro attribué non trouvé" });
       }
 
-      numeroAttribue.statut = "suspendu";
+      historique.reference_modification = reference_decision;
       historique.appliquee = true;
-      await numeroAttribue.save();
-
-      // Mise à jour de l'historique et création de la décision de suspension
       await historique.save();
 
+      for (const numero of numeroAttribue) {
+        numero.statut = "suspendu";
+        await numero.save();
+      }
+
+      // Mise à jour de l'historique et création de la décision de suspension
       const attributionDecision = await AttributionDecision.create({
         attribution_id: attribution.id,
         reference_decision,

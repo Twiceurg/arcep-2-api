@@ -2,6 +2,7 @@ const {
   Pnn,
   Service,
   AttributionNumero,
+  ZoneUtilisation,
   Category,
   Utilisation
 } = require("../../models");
@@ -17,7 +18,8 @@ class PnnController {
         partitionPrefix,
         selectedService,
         selectedCategory,
-        selectedUtilisation
+        selectedUtilisation,
+        zoneSelectionnee
       } = req.body;
 
       let partitionPrefixB = req.body.partitionPrefixB || null;
@@ -104,6 +106,7 @@ class PnnController {
             partition_prefix: prefix,
             partition_length: partitionLength,
             category_id: selectedCategory,
+            zone_utilisation_id: zoneSelectionnee || null,
             bloc_min,
             block_max,
             service_id: selectedService,
@@ -141,6 +144,7 @@ class PnnController {
               partition_prefix: prefix,
               partition_prefix_b: prefixB,
               partition_length: partitionLength,
+              zone_utilisation_id: zoneSelectionnee || null,
               category_id: selectedCategory,
               bloc_min,
               block_max,
@@ -171,7 +175,8 @@ class PnnController {
         include: [
           { model: Service },
           { model: AttributionNumero, as: "attributions" },
-          { model: Utilisation }
+          { model: Utilisation },
+          { model: ZoneUtilisation }
         ]
       });
 
@@ -328,15 +333,16 @@ class PnnController {
         include: [
           { model: Service }, // Inclure le service associé
           { model: AttributionNumero, as: "attributions" },
-          { model: Utilisation }
+          { model: Utilisation },
+          { model: ZoneUtilisation }
         ]
       });
 
       if (!pnn) {
-        return res.status(404).json({ message: "PNN non trouvé" });
+        return res.json({ message: "PNN non trouvé" });
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         pnn
       });
@@ -353,7 +359,7 @@ class PnnController {
 
       const pnn = await Pnn.findByPk(id);
       if (!pnn) {
-        return res.status(404).json({ message: "PNN non trouvé" });
+        return res.json({ message: "PNN non trouvé" });
       }
 
       await pnn.destroy();
@@ -374,14 +380,13 @@ class PnnController {
         where: { service_id: serviceId, etat: true },
         include: [
           { model: Service },
+          { model: ZoneUtilisation },
           { model: AttributionNumero, as: "attributions" }
         ]
       });
 
       if (pnns.length === 0) {
-        return res
-          .status(404)
-          .json({ message: "Aucun PNN trouvé pour ce service" });
+        return res.json({ message: "Aucun PNN trouvé pour ce service" });
       }
 
       return res.status(200).json({
@@ -390,7 +395,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ message: "Erreur interne du serveur" });
     }
   }
 
@@ -403,14 +408,15 @@ class PnnController {
         where: { utilisation_id: utilisationId },
         include: [
           { model: Service },
+          { model: ZoneUtilisation },
           { model: AttributionNumero, as: "attributions" }
         ]
       });
 
       if (pnns.length === 0) {
-        return res
-          .status(404)
-          .json({ message: "Aucun PNN trouvé pour ce type d'utilisation" });
+        return res.json({
+          message: "Aucun PNN trouvé pour ce type d'utilisation"
+        });
       }
 
       return res.status(200).json({
@@ -419,7 +425,36 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ message: "Erreur interne du serveur" });
+    }
+  }
+
+  static async getPnnsByZoneId(req, res) {
+    try {
+      const { zoneId } = req.params;
+
+      // Récupérer les PNNs associés à ce utilisation_id
+      const pnns = await Pnn.findAll({
+        where: { zone_utilisation_id: zoneId },
+        include: [
+          { model: Service },
+          { model: AttributionNumero, as: "attributions" }
+        ]
+      });
+
+      if (pnns.length === 0) {
+        return res.json({
+          message: "Aucun PNN trouvé pour ce type d'utilisation"
+        });
+      }
+
+      return res.status(200).json({
+        success: true,
+        pnns
+      });
+    } catch (error) {
+      console.error(error);
+      return res.json({ message: "Erreur interne du serveur" });
     }
   }
 
@@ -430,9 +465,7 @@ class PnnController {
       // Vérifier si le PNN existe
       const pnn = await Pnn.findByPk(id);
       if (!pnn) {
-        return res
-          .status(404)
-          .json({ success: false, message: "PNN non trouvé" });
+        return res.json({ success: false, message: "PNN non trouvé" });
       }
 
       // Basculer l'état (true <-> false)
@@ -451,7 +484,7 @@ class PnnController {
       });
     } catch (error) {
       console.error("Erreur lors de la mise à jour de l'état du PNN :", error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });

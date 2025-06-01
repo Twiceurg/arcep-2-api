@@ -21,6 +21,9 @@ module.exports = (sequelize, DataTypes) => {
       });
       Pnn.belongsTo(models.Category, { foreignKey: "category_id" });
       Pnn.belongsTo(models.Utilisation, { foreignKey: "utilisation_id" });
+      Pnn.belongsTo(models.ZoneUtilisation, {
+        foreignKey: "zone_utilisation_id"
+      });
     }
   }
   Pnn.init(
@@ -42,6 +45,10 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false
       },
       category_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
+      zone_utilisation_id: {
         type: DataTypes.INTEGER,
         allowNull: true
       },

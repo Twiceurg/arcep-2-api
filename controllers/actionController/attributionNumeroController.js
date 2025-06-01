@@ -1,5 +1,6 @@
 const {
   AttributionNumero,
+  ZoneUtilisation,
   Client,
   Service,
   USSDAttribution,
@@ -31,33 +32,35 @@ class AttributionNumeroController {
       const {
         type_utilisation_id,
         service_id,
-        pnn_id,
+        pnn_id: rawPnnId,
         client_id,
         numero_attribue, // Tableau des numéros attribués
         reference_decision,
         etat_autorisation,
         regle,
-        utilisation_id
+        utilisation_id,
+        zone_utilisation_id
       } = req.body;
 
-      // Validation : vérifier que le tableau des numéros attribués est fourni
+      // Validation : tableau des numéros
       if (
         !numero_attribue ||
         !Array.isArray(numero_attribue) ||
         numero_attribue.length === 0
       ) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message:
             "Le tableau des numéros attribués est requis et doit être un tableau non vide"
         });
       }
-      // Vérifier les doublons dans le tableau reçu
+
+      // Vérifier doublons dans le tableau
       const duplicates = numero_attribue.filter(
         (item, index) => numero_attribue.indexOf(item) !== index
       );
       if (duplicates.length > 0) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message: `Les numéros suivants sont en double dans votre requête : ${[
             ...new Set(duplicates)
@@ -66,64 +69,56 @@ class AttributionNumeroController {
       }
 
       if (!utilisation_id) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message: "L'attribution du service attribué est requise"
         });
       }
-      const validNumbers = [];
 
-      // Vérifier si le PNN existe
-      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
-      if (!pnn) {
-        return res
-          .status(404)
-          .json({ success: false, message: "PNN introuvable" });
-      }
+      let validNumbers = [...numero_attribue]; // par défaut, tous les numéros sont valides
 
-      // Vérifier que chaque numéro est dans la plage autorisée
-      for (const numero of numero_attribue) {
-        if (numero < pnn.bloc_min || numero > pnn.block_max) {
-          return res.status(400).json({
+      // Initialiser pnn_id avec null par défaut
+      let pnn_id = null;
+
+      // Si rawPnnId est défini, tenter de le récupérer
+      if (rawPnnId) {
+        const pnn = await Pnn.findOne({ where: { id: rawPnnId } });
+        if (!pnn) {
+          return res.status(404).json({
             success: false,
-            message: `Le numéro ${numero} est en dehors de la plage autorisée`
+            message: "PNN introuvable"
           });
         }
-        validNumbers.push(numero);
+
+        pnn_id = rawPnnId;
+
+        // Vérification de la plage autorisée
+        for (const numero of numero_attribue) {
+          if (numero < pnn.bloc_min || numero > pnn.block_max) {
+            return res.json({
+              success: false,
+              message: `Le numéro ${numero} est en dehors de la plage autorisée du PNN`
+            });
+          }
+        }
       }
 
+      // Vérifier conflits dans NumeroAttribue
       const numeroConflicts = await NumeroAttribue.findAll({
         where: {
-          numero_attribue: {
-            [Op.in]: validNumbers
-          },
-          statut: {
-            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
-          }
+          numero_attribue: { [Op.in]: validNumbers },
+          statut: { [Op.ne]: "libre" }
         },
-        include: [
-          {
-            model: AttributionNumero,
-            include: [Client] // Inclure les détails du client auquel le numéro est attribué
-          }
-        ]
+        include: [{ model: AttributionNumero, include: [Client] }]
       });
 
+      // Vérifier conflits dans UssdAttribuer
       const ussdConflicts = await UssdAttribuer.findAll({
         where: {
-          ussd_attribue: {
-            [Op.in]: validNumbers
-          },
-          statut: {
-            [Op.ne]: "libre" // Si le statut est différent de 'libre', c'est un conflit
-          }
+          ussd_attribue: { [Op.in]: validNumbers },
+          statut: { [Op.ne]: "libre" }
         },
-        include: [
-          {
-            model: USSDAttribution,
-            include: [Client] // Inclure les détails du client auquel l'USSD est attribué
-          }
-        ]
+        include: [{ model: USSDAttribution, include: [Client] }]
       });
 
       const conflicts = [];
@@ -132,7 +127,7 @@ class AttributionNumeroController {
         const clientName =
           entry.AttributionNumero?.Client?.denomination || "client inconnu";
         conflicts.push(
-          `Le numéro ${entry.numero_attribue} a déjà été attribué a : ${clientName}`
+          `Le numéro ${entry.numero_attribue} a déjà été attribué à : ${clientName}`
         );
       });
 
@@ -140,53 +135,45 @@ class AttributionNumeroController {
         const clientName =
           entry.USSDAttribution?.Client?.denomination || "client inconnu";
         conflicts.push(
-          `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD a  : ${clientName}`
+          `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD à : ${clientName}`
         );
       });
 
       if (conflicts.length > 0) {
-        return res.status(409).json({
-          success: false,
-          message: conflicts.join(" ; ")
-        });
+        return res
+          .status(409)
+          .json({ success: false, message: conflicts.join(" ; ") });
       }
 
-      // Calcul de la date d'expiration
-      // const dateExpiration = new Date();
-      // const dateAttribution = new Date();
-      // dateExpiration.setFullYear(
-      //   dateExpiration.getFullYear() + parseInt(duree_utilisation, 10)
-      // );
-
-      const etatAutorisation = false;
-      // Créer une seule attribution (si ce n'est pas déjà fait) pour tous les numéros
+      // Création de l'attribution
       const attribution = await AttributionNumero.create({
         type_utilisation_id,
         service_id,
-        pnn_id,
+        pnn_id: pnn_id || null,
         client_id,
+        zone_utilisation_id: zone_utilisation_id || null,
         regle,
         reference_decision,
-        etat_autorisation: etatAutorisation,
+        etat_autorisation: false,
         utilisation_id
       });
 
-      // Lier chaque numéro à cette attribution dans la table NumeroAttribue
+      // Création des entrées NumeroAttribue
       const numeroAttribueEntries = numero_attribue.map((numero) => ({
         attribution_id: attribution.id,
         numero_attribue: numero,
+        zone_utilisation_id: zone_utilisation_id || null,
         utilisation_id,
-        pnn_id: pnn_id,
+        pnn_id: pnn_id || null,
         created_at: new Date(),
         updated_at: new Date()
       }));
 
-      // Insérer tous les numéros dans la table NumeroAttribue
       const numeroAttribues = await NumeroAttribue.bulkCreate(
         numeroAttribueEntries
       );
 
-      // Ajouter les enregistrements dans la table HistoriqueAttributionNumero
+      // Historique
       const historiqueEntries = numeroAttribues.map((numeroAttribue) => ({
         attribution_id: attribution.id,
         numero_id: numeroAttribue.id,
@@ -198,7 +185,6 @@ class AttributionNumeroController {
         updated_at: new Date()
       }));
 
-      // Insérer les historiques dans la table HistoriqueAttributionNumero
       await HistoriqueAttributionNumero.bulkCreate(historiqueEntries);
 
       return res.status(201).json({
@@ -275,8 +261,11 @@ class AttributionNumeroController {
         where: whereConditions,
         include: [
           { model: Client },
+          { model: Utilisation },
+          { model: ZoneUtilisation },
           {
             model: AttributionDecision,
+
             order: [["date_attribution", "ASC"]]
           },
           {
@@ -377,18 +366,28 @@ class AttributionNumeroController {
       // );
 
       if (serviceId) {
+        const idService = parseInt(serviceId);
         filteredAttributions = filteredAttributions.filter(
-          (attr) => attr.Service && attr.Service.id === parseInt(serviceId)
+          (attr) => attr.Service && attr.Service.id === idService
         );
       }
 
       if (utilisationId) {
-        filteredAttributions = filteredAttributions.filter(
-          (attr) =>
-            attr.Pnn &&
-            attr.Pnn.Utilisation &&
-            attr.Pnn.Utilisation.id === parseInt(utilisationId)
-        );
+        const idUtilisation = parseInt(utilisationId);
+        console.log("Filtrage uniquement par Utilisation.id =", idUtilisation);
+
+        filteredAttributions.forEach((attr, index) => {
+          console.log(
+            `Attribution #${index}`,
+            "Utilisation.id =",
+            attr.Utilisation?.id
+          );
+        });
+
+        filteredAttributions = filteredAttributions.filter((attr) => {
+          // On filtre sur Utilisation.id seulement, sans tenir compte de la décision pertinente
+          return attr.Utilisation?.id === idUtilisation;
+        });
       }
 
       filteredAttributions = filteredAttributions.filter(
@@ -809,6 +808,7 @@ class AttributionNumeroController {
         service_id,
         pnn_id,
         client_id,
+        zone_utilisation_id,
         numero_attribue,
         regle,
         utilisation_id,
@@ -822,7 +822,7 @@ class AttributionNumeroController {
         !Array.isArray(numero_attribue) ||
         numero_attribue.length === 0
       ) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message:
             "Le tableau des numéros attribués est requis et doit être un tableau non vide"
@@ -858,7 +858,7 @@ class AttributionNumeroController {
       // Vérifier que chaque numéro est valide
       for (const numero of numero_attribue) {
         if (numero < pnn.bloc_min || numero > pnn.block_max) {
-          return res.status(400).json({
+          return res.json({
             success: false,
             message: `Le numéro ${numero} est en dehors de la plage autorisée`
           });
@@ -900,6 +900,7 @@ class AttributionNumeroController {
       // Mise à jour de l'attribution
       attribution.type_utilisation_id = type_utilisation_id;
       attribution.service_id = service_id;
+      attribution.zone_utilisation_id = zone_utilisation_id;
       attribution.pnn_id = pnn_id;
       attribution.client_id = client_id;
       attribution.regle = regle;
@@ -917,6 +918,9 @@ class AttributionNumeroController {
       // Ajouter les nouveaux numéros attribués
       const numeroAttribueEntries = numbersToAdd.map((numero) => ({
         attribution_id: attribution.id,
+        zone_utilisation_id: zone_utilisation_id || null,
+        utilisation_id,
+        pnn_id: pnn_id || null,
         numero_attribue: numero,
         created_at: new Date(),
         updated_at: new Date()
@@ -993,7 +997,7 @@ class AttributionNumeroController {
       const { pnn_id } = req.params;
 
       if (!pnn_id) {
-        return res.status(400).json({ error: "PNN ID est requis." });
+        return res.json({ error: "PNN ID est requis." });
       }
 
       // Recherche des attributions pour ce PNN avec état autorisation true
@@ -1131,7 +1135,7 @@ class AttributionNumeroController {
 
       // Vérifier si la référence est fournie
       if (!reference_decision) {
-        return res.status(400).json({ message: "La référence est requise" });
+        return res.json({ message: "La référence est requise" });
       }
 
       // Vérifier si la date d'attribution est fournie
@@ -1148,7 +1152,7 @@ class AttributionNumeroController {
           : null;
 
         if (!match) {
-          return res.status(400).json({
+          return res.json({
             message:
               "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
           });
@@ -1241,7 +1245,7 @@ class AttributionNumeroController {
       const file = req.file;
 
       if (!file) {
-        return res.status(400).json({ message: "Le fichier est requis" });
+        return res.json({ message: "Le fichier est requis" });
       }
 
       // Vérifier si l'attribution existe avec son service
@@ -1263,7 +1267,7 @@ class AttributionNumeroController {
 
       // Vérifier si la référence est fournie
       if (!reference_decision) {
-        return res.status(400).json({ message: "La référence est requise" });
+        return res.json({ message: "La référence est requise" });
       }
 
       // Vérifier si la date d'attribution est fournie
@@ -1280,7 +1284,7 @@ class AttributionNumeroController {
           : null;
 
         if (!match) {
-          return res.status(400).json({
+          return res.json({
             message:
               "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
           });
@@ -1434,7 +1438,7 @@ class AttributionNumeroController {
 
   //       // Vérifier si la référence est fournie
   //       if (!reference_decision) {
-  //         return res.status(400).json({ message: "La référence est requise" });
+  //         return res.json({ message: "La référence est requise" });
   //       }
 
   //       // Vérifier si la date d'attribution est fournie
@@ -1456,7 +1460,7 @@ class AttributionNumeroController {
   //           : null;
 
   //         if (!match) {
-  //           return res.status(400).json({
+  //           return res.json({
   //             message:
   //               "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
   //           });
@@ -1515,7 +1519,7 @@ class AttributionNumeroController {
 
       // Vérification des données obligatoires
       if (!attributionId || !motif || !dateDebut || !dureeSuspension) {
-        return res.status(400).json({
+        return res.json({
           message:
             "Données manquantes : attributionId, motif, dateDebut, ou dureeSuspension."
         });
@@ -1524,13 +1528,13 @@ class AttributionNumeroController {
       // Vérification de la validité de la date de début
       const dateDebutObj = new Date(dateDebut);
       if (isNaN(dateDebutObj.getTime())) {
-        return res.status(400).json({ message: "Date de début invalide." });
+        return res.json({ message: "Date de début invalide." });
       }
 
       // Vérification et extraction de la durée de suspension (mois ou années)
       const match = dureeSuspension.match(/^(\d+)\s*(mois|ans)$/i);
       if (!match) {
-        return res.status(400).json({
+        return res.json({
           message:
             "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
         });
@@ -1585,7 +1589,7 @@ class AttributionNumeroController {
 
     // Vérifier si l'attributionId est défini
     if (!id) {
-      return res.status(400).json({
+      return res.json({
         success: false,
         message: "L'identifiant de l'attribution est requis."
       });

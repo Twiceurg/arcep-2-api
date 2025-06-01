@@ -43,15 +43,25 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
-      utilisation_id: {  
+      utilisation_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
         references: {
-          model: "Utilisations", 
-          key: "id"  
+          model: "Utilisations",
+          key: "id"
         },
-        onUpdate: "CASCADE",  
-        onDelete: "SET NULL" 
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
+      },
+      zone_utilisation_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "ZoneUtilisations",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
       },
       category_id: {
         type: Sequelize.INTEGER,

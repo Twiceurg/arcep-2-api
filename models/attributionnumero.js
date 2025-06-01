@@ -25,17 +25,20 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
       });
+      AttributionNumero.belongsTo(models.ZoneUtilisation, {
+        foreignKey: "zone_utilisation_id"
+      });
       AttributionNumero.hasMany(models.Renouvellement, {
         foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.AttributionDecision, {
-        foreignKey: 'attribution_id',
+        foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.HistoriqueAttribution, {
-        foreignKey: 'attribution_id',
+        foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.HistoriqueAttributionNumero, {
-        foreignKey: 'attribution_id', 
+        foreignKey: "attribution_id"
       });
     }
   }
@@ -57,7 +60,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true
       },
- 
+
       utilisation_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -65,6 +68,10 @@ module.exports = (sequelize, DataTypes) => {
           model: "Utilisations",
           key: "id"
         }
+      },
+      zone_utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
       },
       reference_decision: {
         type: DataTypes.STRING,
