@@ -61,14 +61,34 @@ const historiqueAttributionController = {
 
   async appliquerSuspension(req, res) {
     try {
-      console.log(req.body); // Pour voir ce qui est reçu
-      console.log(req.file); // Pour voir si le fichier a été correctement envoyé
+      console.log(req.body); // Pour debug des données reçues
+      console.log(req.files); // Pour debug des fichiers reçus
 
       const utilisateurId = req.user.id;
 
-      // Déstructuration des données dans req.body
-      const { attributionId, motif, dateDebut, dureeSuspension } = req.body;
-      let fichierUrl = req.file ? `/uploads/${req.file.filename}` : null; // Vérification si un fichier est présent
+      // Extraction des données
+      const {
+        attributionId,
+        motif,
+        dateDebut,
+        dureeSuspension,
+        reference_decision,
+        numeros_selectionnes
+      } = req.body;
+
+      // Vérification et conversion de attributionId
+      const attributionIdInt = parseInt(attributionId, 10);
+      if (isNaN(attributionIdInt)) {
+        return res.status(400).json({ message: "attributionId invalide." });
+      }
+
+      // Gestion des fichiers uploadés
+      const fichierUrl = req.files?.fichier?.[0]
+        ? `/uploads/${req.files.fichier[0].filename}`
+        : null;
+      const decisionFileUrl = req.files?.decision_file?.[0]
+        ? `/uploads/${req.files.decision_file[0].filename}`
+        : null;
 
       // Vérification des données obligatoires
       if (!attributionId || !motif || !dateDebut || !dureeSuspension) {
@@ -105,33 +125,30 @@ const historiqueAttributionController = {
       const dateFinSuspension = new Date(dateDebutObj);
       dateFinSuspension.setMonth(dateDebutObj.getMonth() + dureeEnMois);
 
-      // Créer l'entrée d'historique de suspension
+      // Création de l'entrée d'historique de suspension
       const historique = await HistoriqueAttribution.create({
-        attribution_id: attributionId,
-        reference_modification: null, // Reference initiale
-        motif: motif,
+        attribution_id: attributionIdInt,
+        reference_modification: null,
+        motif,
         utilisateur_id: utilisateurId,
-        type_modification: "suspension", // Type de modification
-        date_debut: dateDebut, // Date de début de la suspension
-        duree_suspension: dureeSuspension, // Durée de la suspension (en mois ou années)
-        date_fin_suspension: dateFinSuspension, // Date de fin calculée
-        appliquee: false, // Marquer comme non appliquée
-        fichier: fichierUrl // URL du fichier ajouté à l'historique
+        type_modification: "suspension",
+        date_debut: dateDebutObj,
+        duree_suspension: dureeSuspension,
+        date_fin_suspension: dateFinSuspension,
+        appliquee: false,
+        fichier: fichierUrl
       });
 
-      // Optionnel : Marquer l'attribution comme suspendue si nécessaire
-      // await AttributionNumero.update(
-      //   { statut: "suspendu" }, // Le statut devient suspendu
-      //   { where: { id: attributionId } }
-      // );
+      // Injection des données nécessaires pour assignReference
+      req.body.historiqueId = historique.id;
+      req.body.date_attribution = dateDebutObj;
+      req.body.duree_utilisation = null;
+      req.body.reference_decision = reference_decision;
+      req.body.numeros_selectionnes = numeros_selectionnes;
+      req.body.decision_file_url = decisionFileUrl;
 
-      // Répondre avec succès
-      return res.status(200).json({
-        success: true,
-        message:
-          "Suspension appliquée avec succès, référence de décision à appliquer ultérieurement.",
-        historique: historique
-      });
+      // Appel direct à assignReference
+      return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error("Erreur lors de l'application de la suspension :", error);
       return res.status(500).json({ message: "Erreur interne du serveur." });
@@ -144,8 +161,20 @@ const historiqueAttributionController = {
       console.log(req.file);
 
       const utilisateurId = req.user.id;
-      const { attributionId, motif, dateDebut } = req.body;
-      let fichierUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const {
+        attributionId,
+        motif,
+        dateDebut,
+        reference_decision,
+        numeros_selectionnes
+      } = req.body;
+
+      const fichierUrl = req.files?.fichier
+        ? `/uploads/${req.files.fichier[0].filename}`
+        : null;
+      const decisionFileUrl = req.files?.decision_file
+        ? `/uploads/${req.files.decision_file[0].filename}`
+        : null;
 
       // Vérification des champs obligatoires
       if (!attributionId || !motif || !dateDebut) {
@@ -164,7 +193,7 @@ const historiqueAttributionController = {
       const historique = await HistoriqueAttribution.create({
         attribution_id: attributionId,
         reference_modification: null,
-        motif: motif,
+        motif,
         utilisateur_id: utilisateurId,
         type_modification: "retrait",
         date_debut: dateDebut,
@@ -174,12 +203,16 @@ const historiqueAttributionController = {
         fichier: fichierUrl
       });
 
-      return res.status(200).json({
-        success: true,
-        message:
-          "Retrait appliqué avec succès, référence de décision à appliquer ultérieurement.",
-        historique: historique
-      });
+      // Injection des données nécessaires pour assignReference
+      req.body.historiqueId = historique.id;
+      req.body.date_attribution = dateDebut;
+      req.body.duree_utilisation = null;
+      req.body.reference_decision = reference_decision;
+      req.body.numeros_selectionnes = numeros_selectionnes;
+      req.body.decision_file_url = decisionFileUrl;
+
+      // Appel direct à assignReference
+      return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error("Erreur lors de l'application du retrait :", error);
       return res.status(500).json({ message: "Erreur interne du serveur." });
@@ -189,11 +222,25 @@ const historiqueAttributionController = {
   async appliquerRésiliation(req, res) {
     try {
       console.log(req.body);
-      console.log(req.file);
+      console.log(req.files);
 
       const utilisateurId = req.user.id;
-      const { attributionId, motif, dateDebut } = req.body;
-      let fichierUrl = req.file ? `/uploads/${req.file.filename}` : null;
+      const {
+        attributionId,
+        motif,
+        dateDebut,
+        reference_decision,
+        numeros_selectionnes
+      } = req.body;
+
+      // Récupération des fichiers uploadés (si présence)
+      const fichierUrl = req.files?.fichier
+        ? `/uploads/${req.files.fichier[0].filename}`
+        : null;
+
+      const decisionFileUrl = req.files?.decision_file
+        ? `/uploads/${req.files.decision_file[0].filename}`
+        : null;
 
       // Vérification des champs obligatoires
       if (!attributionId || !motif || !dateDebut) {
@@ -202,17 +249,17 @@ const historiqueAttributionController = {
         });
       }
 
-      // Vérification de la validité de la date de début
+      // Validation date
       const dateDebutObj = new Date(dateDebut);
       if (isNaN(dateDebutObj.getTime())) {
         return res.status(400).json({ message: "Date de début invalide." });
       }
 
-      // Création de l'entrée d'historique sans durée ni date de fin
+      // Création de l'entrée dans l'historique
       const historique = await HistoriqueAttribution.create({
         attribution_id: attributionId,
         reference_modification: null,
-        motif: motif,
+        motif,
         utilisateur_id: utilisateurId,
         type_modification: "résiliation",
         date_debut: dateDebut,
@@ -222,12 +269,16 @@ const historiqueAttributionController = {
         fichier: fichierUrl
       });
 
-      return res.status(200).json({
-        success: true,
-        message:
-          "Résiliation appliqué avec succès, référence de décision à appliquer ultérieurement.",
-        historique: historique
-      });
+      // Préparation des données pour assignReference
+      req.body.historiqueId = historique.id;
+      req.body.date_attribution = dateDebut;
+      req.body.duree_utilisation = null;
+      req.body.reference_decision = reference_decision;
+      req.body.numeros_selectionnes = numeros_selectionnes;
+      req.body.decision_file_url = decisionFileUrl;
+
+      // Appel de la fonction assignReference (du controller)
+      return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error("Erreur lors de l'application de Résiliation :", error);
       return res.status(500).json({ message: "Erreur interne du serveur." });
@@ -241,16 +292,18 @@ const historiqueAttributionController = {
         reference_decision,
         date_attribution,
         duree_utilisation,
-        numeros_selectionnes
+        historiqueId,
+        numeros_selectionnes,
+        decision_file_url
       } = req.body;
-      const file = req.file;
+      // const file = req.file;
 
       console.log("Type de numeros_selectionnes:", typeof numeros_selectionnes);
       console.log("Est-ce un tableau ?", Array.isArray(numeros_selectionnes));
       console.log("Contenu:", numeros_selectionnes);
 
       // Vérifier si l'historique existe
-      const historique = await HistoriqueAttribution.findByPk(id, {
+      const historique = await HistoriqueAttribution.findByPk(historiqueId, {
         include: [{ model: AttributionNumero }]
       });
 
@@ -260,27 +313,32 @@ const historiqueAttributionController = {
 
       // On s'assure que numerosAffectes est bien un tableau
       let numerosAffectes = [];
-      if (typeof numeros_selectionnes === "string") {
-        try {
-          numerosAffectes = JSON.parse(numeros_selectionnes);
-          if (!Array.isArray(numerosAffectes)) {
-            return res
-              .status(400)
-              .json({ message: "Format des numéros sélectionnés invalide" });
+
+      // Traitement facultatif de numeros_selectionnes s’il est défini
+      if (numeros_selectionnes) {
+        if (typeof numeros_selectionnes === "string") {
+          try {
+            numerosAffectes = JSON.parse(numeros_selectionnes);
+            if (!Array.isArray(numerosAffectes)) {
+              return res.json({
+                success: false,
+                message: "Format des numéros sélectionnés invalide"
+              });
+            }
+          } catch {
+            return res.json({
+              success: false,
+              message: "Format des numéros sélectionnés invalide"
+            });
           }
-        } catch {
-          return res
-            .status(400)
-            .json({ message: "Format des numéros sélectionnés invalide" });
-        }
-      } else if (Array.isArray(numeros_selectionnes)) {
-        numerosAffectes = numeros_selectionnes;
-      } else {
-        return res
-          .status(400)
-          .json({
+        } else if (Array.isArray(numeros_selectionnes)) {
+          numerosAffectes = numeros_selectionnes;
+        } else {
+          return res.json({
+            success: false,
             message: "Les numéros sélectionnés doivent être un tableau"
           });
+        }
       }
 
       const attribution = historique.AttributionNumero; // L'attribution associée à l'historique
@@ -293,28 +351,32 @@ const historiqueAttributionController = {
       ) => {
         historique.appliquee = true;
         historique.reference_modification = reference_decision;
-        historique.fichier = file ? `/uploads/${file.filename}` : null;
+        historique.fichier = decision_file_url || null;
         await historique.save();
 
         // Mise à jour du statut du numéro attribué
-        const numeroAttribue = await NumeroAttribue.findAll({
-          where: {
-            attribution_id: attribution.id,
-            numero_attribue: {
-              [Op.in]: numerosAffectes
+        // Mise à jour du statut du numéro attribué
+        if (numerosAffectes.length > 0) {
+          const numeroAttribue = await NumeroAttribue.findAll({
+            where: {
+              attribution_id: attribution.id,
+              numero_attribue: {
+                [Op.in]: numerosAffectes
+              }
             }
+          });
+
+          if (!numeroAttribue || numeroAttribue.length === 0) {
+            return res.json({
+              success: false,
+              message: "Aucun numéro attribué correspondant trouvé"
+            });
           }
-        });
 
-        if (!numeroAttribue || numeroAttribue.length === 0) {
-          return res
-            .status(404)
-            .json({ message: "Numéro attribué non trouvé" });
-        }
-
-        for (const numero of numeroAttribue) {
-          numero.statut = status;
-          await numero.save();
+          for (const numero of numeroAttribue) {
+            numero.statut = status;
+            await numero.save();
+          }
         }
 
         // Créer une décision
@@ -324,8 +386,8 @@ const historiqueAttributionController = {
           date_attribution: historique.date_debut,
           date_expiration: additionalData.date_expiration || null,
           duree_utilisation: additionalData.duree_utilisation || null,
-          etat_autorisation: false,
-          fichier: file ? `/uploads/${file.filename}` : null,
+          etat_autorisation: true,
+          fichier: decision_file_url || null,
           type_decision: decisionType
         });
 
@@ -351,9 +413,9 @@ const historiqueAttributionController = {
           });
 
           if (!lastAttributionDecision) {
-            return res
-              .status(404)
-              .json({ message: "Aucune décision d'attribution trouvée" });
+            return res.json({
+              message: "Aucune décision d'attribution trouvée"
+            });
           }
 
           historique.duree_suspension =
@@ -443,7 +505,7 @@ const historiqueAttributionController = {
         date_expiration: historique.date_fin_suspension,
         duree_utilisation: historique.duree_suspension,
         etat_autorisation: true,
-        fichier: file ? `/uploads/${file.filename}` : null,
+        fichier: decision_file_url || null,
         type_decision: "suspension"
       });
 

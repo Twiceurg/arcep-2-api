@@ -24,6 +24,7 @@ const {
   Sequelize
 } = require("../../models");
 const { Op } = require("sequelize");
+const historiqueAttributionController = require("./historiqueAtributionController");
 
 class AttributionNumeroController {
   // 📌 Créer une attribution
@@ -277,7 +278,14 @@ class AttributionNumeroController {
             model: Pnn,
             include: [{ model: Utilisation }]
           },
-          { model: NumeroAttribue },
+          {
+            model: NumeroAttribue,
+            where: {
+              statut: {
+                [Op.notIn]: ["Retiré", "Résiliation"]
+              }
+            }
+          },
           { model: Rapport }
         ]
       });
@@ -729,7 +737,14 @@ class AttributionNumeroController {
             model: Pnn,
             include: [{ model: Utilisation }]
           },
-          { model: NumeroAttribue }
+          {
+            model: NumeroAttribue,
+            where: {
+              statut: {
+                [Op.notIn]: ["Retiré", "Résiliation"]
+              }
+            }
+          }
         ]
       });
 
@@ -812,70 +827,68 @@ class AttributionNumeroController {
         numero_attribue,
         regle,
         utilisation_id,
-        motif // ✅ Ajout du motif
+        motif,
+        reference_decision
       } = req.body;
 
-      const file = req.file; // ✅ Récupération du fichier
+      const file = req.file;
 
-      if (
-        !numero_attribue ||
-        !Array.isArray(numero_attribue) ||
-        numero_attribue.length === 0
-      ) {
-        return res.json({
-          success: false,
-          message:
-            "Le tableau des numéros attribués est requis et doit être un tableau non vide"
-        });
-      }
+      // if (
+      //   !numero_attribue ||
+      //   !Array.isArray(numero_attribue) ||
+      //   numero_attribue.length === 0
+      // ) {
+      //   return res.json({
+      //     success: false,
+      //     message:
+      //       "Le tableau des numéros attribués est requis et doit être un tableau non vide"
+      //   });
+      // }
 
-      // Vérifier si l'attribution existe
       const attribution = await AttributionNumero.findByPk(id, {
-        include: [{ model: AttributionDecision }] // Inclure les décisions
+        include: [{ model: AttributionDecision }]
       });
 
       if (!attribution) {
         return res.status(404).json({ message: "Attribution non trouvée" });
       }
 
-      // ✅ Récupération de la durée d'utilisation depuis AttributionDecision
+      // Durée d'utilisation existante, on utilise la valeur actuelle
       const dureeSuspension =
-        attribution.AttributionDecision?.duree_utilisation; // Par défaut 12 mois
-      const dateDebut = new Date(); // Date actuelle
+        attribution.AttributionDecision?.duree_utilisation || 12;
+
+      const dateDebut = new Date();
       const dateFinSuspension = new Date(dateDebut);
       dateFinSuspension.setMonth(dateDebut.getMonth() + dureeSuspension);
 
-      // Vérifier si le PNN existe
       const pnn = await Pnn.findOne({ where: { id: pnn_id } });
       if (!pnn) {
         return res
           .status(404)
           .json({ success: false, message: "PNN introuvable" });
       }
-      console.log("PNN:", pnn);
-      console.log("Bloc Min:", pnn.bloc_min);
-      console.log("Bloc Max:", pnn.block_max);
-      // Vérifier que chaque numéro est valide
-      for (const numero of numero_attribue) {
-        if (numero < pnn.bloc_min || numero > pnn.block_max) {
-          return res.json({
-            success: false,
-            message: `Le numéro ${numero} est en dehors de la plage autorisée`
-          });
-        }
-      }
 
-      // Vérifier si un numéro appartient déjà à l'attribution actuelle
+      // Vérifier validité des numéros dans la plage
+      // for (const numero of numero_attribue) {
+      //   if (numero < pnn.bloc_min || numero > pnn.block_max) {
+      //     return res.json({
+      //       success: false,
+      //       message: `Le numéro ${numero} est en dehors de la plage autorisée`
+      //     });
+      //   }
+      // }
+
+      // Récupérer tous les numéros déjà attribués dans la base, quel que soit le statut
       const existingNumbers = await NumeroAttribue.findAll({
         where: { numero_attribue: { [Op.in]: numero_attribue } }
       });
 
-      // Liste des numéros déjà attribués à cette attribution
+      // Nums déjà attribués à cette attribution
       const existingAssignedNumbers = existingNumbers.filter(
         (num) => num.attribution_id === attribution.id
       );
 
-      // Liste des nouveaux numéros
+      // Nouveaux numéros à ajouter
       const numbersToAdd = numero_attribue.filter(
         (numero) =>
           !existingAssignedNumbers
@@ -883,13 +896,13 @@ class AttributionNumeroController {
             .includes(numero)
       );
 
-      // Vérifier si les nouveaux numéros sont déjà attribués ailleurs
+      // Numéros en conflit (attribués ailleurs)
       const conflictNumbers = existingNumbers
         .filter((num) => num.attribution_id !== attribution.id)
         .map((num) => num.numero_attribue);
 
       if (conflictNumbers.length > 0) {
-        return res.status(409).json({
+        return res.json({
           success: false,
           message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
             ", "
@@ -907,13 +920,17 @@ class AttributionNumeroController {
       attribution.utilisation_id = utilisation_id;
       await attribution.save();
 
-      // Supprimer les anciens numéros non utilisés
-      await NumeroAttribue.destroy({
-        where: {
-          attribution_id: attribution.id,
-          numero_attribue: { [Op.notIn]: numero_attribue }
+      // Mettre à jour le statut des numéros retirés au lieu de les supprimer
+      await NumeroAttribue.update(
+        { statut: "retire" },
+        {
+          where: {
+            attribution_id: attribution.id,
+            numero_attribue: { [Op.notIn]: numero_attribue },
+            statut: { [Op.ne]: "retire" }
+          }
         }
-      });
+      );
 
       // Ajouter les nouveaux numéros attribués
       const numeroAttribueEntries = numbersToAdd.map((numero) => ({
@@ -922,6 +939,7 @@ class AttributionNumeroController {
         utilisation_id,
         pnn_id: pnn_id || null,
         numero_attribue: numero,
+        statut: "attribue", // préciser le statut actif pour les nouveaux
         created_at: new Date(),
         updated_at: new Date()
       }));
@@ -941,12 +959,16 @@ class AttributionNumeroController {
         updated_at: new Date()
       }));
 
-      // Insérer les historiques dans la table HistoriqueAttributionNumero
       await HistoriqueAttributionNumero.bulkCreate(historiqueEntries);
 
-      const fichierUrl = file ? `/uploads/${file.filename}` : null;
+      const fichierUrl = req.files?.fichier
+        ? `/uploads/${req.files.fichier[0].filename}`
+        : null;
+      const decisionFileUrl = req.files?.decision_file
+        ? `/uploads/${req.files.decision_file_url[0].filename}`
+        : null;
 
-      await HistoriqueAttribution.create({
+      const historique = await HistoriqueAttribution.create({
         attribution_id: attribution.id,
         reference_modification: null,
         motif: motif || "Reclamation de l'attribution",
@@ -959,11 +981,13 @@ class AttributionNumeroController {
         fichier: fichierUrl
       });
 
-      return res.status(200).json({
-        success: true,
-        message: "Attribution reclamer avec succès",
-        attribution
-      });
+      req.body.historiqueId = historique.id;
+      req.body.date_attribution = dateDebut;
+      req.body.duree_utilisation = null;
+      req.body.reference_decision = reference_decision;
+      req.body.decision_file_url = decisionFileUrl;
+      // Appel à assignReference comme demandé
+      return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error(error);
       return res.status(500).json({ message: "Erreur interne du serveur" });
@@ -992,7 +1016,6 @@ class AttributionNumeroController {
 
   // 📌 Récupérer tous les numéros attribués pour un PNN
   static async getAssignedNumbersByPnn(req, res) {
-    +6;
     try {
       const { pnn_id } = req.params;
 

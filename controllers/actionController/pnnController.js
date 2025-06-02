@@ -25,15 +25,14 @@ class PnnController {
       let partitionPrefixB = req.body.partitionPrefixB || null;
 
       if (!partitionLength || !selectedService || !selectedUtilisation) {
-        return res
-          .status(400)
+        return res 
           .json({ message: "Tous les champs requis ne sont pas remplis" });
       }
 
       // Vérifier si le service existe
       const service = await Service.findByPk(selectedService);
       if (!service) {
-        return res.status(404).json({ message: "Service non trouvé" });
+        return res.json({ message: "Service non trouvé" });
       }
 
       let prefixes = [];
@@ -121,7 +120,7 @@ class PnnController {
             const remainingLength = partitionLength - basePrefix.length;
 
             if (remainingLength < 0) {
-              return res.status(400).json({
+              return res.json({
                 message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
               });
             }

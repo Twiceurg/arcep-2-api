@@ -316,8 +316,11 @@ router.put(
   AttributionNumeroController.updateAttribution
 );
 router.put(
-  "/attribution/reclamation/:id",
-  upload.single("file"),
+  "/attribution/reclamation/:id", 
+  upload.fields([
+    { name: "fichier", maxCount: 1 },
+    { name: "decision_file_url", maxCount: 1 }
+  ]),
   authenticateToken,
   authorizeRole("superadmin", "admin"),
   AttributionNumeroController.reclamerAttribution
@@ -539,21 +542,31 @@ router.post(
   "/historique/suspension",
   authorizeRole("superadmin", "admin"),
   authenticateToken,
-  upload.single("fichier"),
+  upload.fields([
+    { name: "fichier", maxCount: 1 },
+    { name: "decision_file", maxCount: 1 }
+  ]),
   historiqueAttributionController.appliquerSuspension
 );
 router.post(
   "/historique/retrait",
   authorizeRole("superadmin", "admin"),
   authenticateToken,
-  upload.single("fichier"),
+  upload.fields([
+    { name: "fichier", maxCount: 1 },
+    { name: "decision_file", maxCount: 1 }
+  ]),
   historiqueAttributionController.appliquerRetrait
 );
+
 router.post(
   "/historique/resiliation",
   authenticateToken,
   authorizeRole("superadmin", "admin"),
-  upload.single("fichier"),
+  upload.fields([
+    { name: "fichier", maxCount: 1 },
+    { name: "decision_file", maxCount: 1 }
+  ]),
   historiqueAttributionController.appliquerRésiliation
 );
 router.put(
