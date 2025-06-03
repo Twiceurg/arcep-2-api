@@ -8,7 +8,9 @@ const {
   AttributionDecision,
   Client,
   USSD,
-  UssdAttribuer
+  UssdAttribuer,
+  sequelize, // N'oublie pas d'importer sequelize ici
+  TypeUtilisation
 } = require("../models");
 
 const getTotalAndRemainingNumbers = async (req, res) => {
@@ -22,72 +24,66 @@ const getTotalAndRemainingNumbers = async (req, res) => {
     console.log("mois:", mois);
     console.log("annee:", annee);
 
-    // Récupérer les PNN
+    // Vérification de l'existence de l'utilisation
+    const utilisation = await Utilisation.findByPk(utilisationId);
+    if (!utilisation) {
+      return res
+        .status(404)
+        .json({ success: false, message: "Utilisation non trouvée" });
+    }
+
+    // Récupération des blocs PNN liés à cette utilisation
     const pnns = await Pnn.findAll({
       where: { utilisation_id: utilisationId },
       attributes: ["id", "bloc_min", "block_max"]
     });
 
-    const utilisation = await Utilisation.findByPk(utilisationId);
-
-    const nom = utilisation.nom;
-
-    // Récupérer les USSD
-    const ussds = await USSD.findAll({
-      where: { utilisation_id: utilisationId },
-      attributes: ["id", "bloc_min", "bloc_max"]
-    });
-
     let start = null;
     let end = null;
 
-    // Gestion des dates
+    // 🎯 Gestion des différentes options de date
     if (startDate && endDate) {
       start = new Date(startDate);
       end = new Date(endDate);
       if (isNaN(start) || isNaN(end)) {
-        return res.status(400).json({
-          success: false,
-          message: "Format de date invalide"
-        });
+        return res
+          .status(400)
+          .json({ success: false, message: "Format de date invalide" });
       }
     } else if (annee && !mois) {
       const y = parseInt(annee);
       if (isNaN(y)) {
-        return res.status(400).json({
-          success: false,
-          message: "Année invalide"
-        });
+        return res
+          .status(400)
+          .json({ success: false, message: "Année invalide" });
       }
-      start = new Date(y, 0, 1); // 1er janvier
-      end = new Date(y, 11, 31); // 31 décembre
+      start = new Date(y, 0, 1);
+      end = new Date(y, 11, 31, 23, 59, 59);
     } else if (annee && mois) {
       const m = parseInt(mois) - 1;
       const y = parseInt(annee);
       if (isNaN(m) || isNaN(y)) {
-        return res.status(400).json({
-          success: false,
-          message: "Mois ou année invalide"
-        });
+        return res
+          .status(400)
+          .json({ success: false, message: "Mois ou année invalide" });
       }
-      start = new Date(y, m, 1); // 1er jour du mois
-      end = new Date(y, m + 1, 0); // Dernier jour du mois
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0, 23, 59, 59);
     } else if (mois && !annee) {
       const m = parseInt(mois) - 1;
       const y = new Date().getFullYear();
       if (isNaN(m)) {
-        return res.status(400).json({
-          success: false,
-          message: "Mois invalide"
-        });
+        return res
+          .status(400)
+          .json({ success: false, message: "Mois invalide" });
       }
-      start = new Date(y, m, 1); // 1er jour du mois actuel
-      end = new Date(y, m + 1, 0); // Dernier jour du mois actuel
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0, 23, 59, 59);
     }
 
-    // Recherche des numéros attribués pour PNN (avec NumeroAttribue)
+    // 📦 Préparation de la clause where pour NumeroAttribue
     const numeroWhere = {
-      statut: { [Op.in]: ["attribue"] },
+      statut: "attribue",
       utilisation_id: utilisationId
     };
 
@@ -97,40 +93,26 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       };
     }
 
-    // Récupération des numéros attribués pour les PNN
+    // 🔢 Récupération des numéros attribués
     const numerosAttribuesPNN = await NumeroAttribue.findAll({
       where: numeroWhere
     });
 
-    // Recherche des numéros attribués pour les USSD (avec UssdAttribuer)
-    const numerosAttribuesUSSD = await UssdAttribuer.findAll({
-      where: numeroWhere
-    });
-
+    // 🧮 Création d’une map pour compter les numéros attribués par PNN
     const allocatedCountMap = {};
-
-    // Comptabilisation des numéros attribués pour les PNN
     numerosAttribuesPNN.forEach((num) => {
       allocatedCountMap[num.pnn_id] = (allocatedCountMap[num.pnn_id] || 0) + 1;
     });
 
-    // Comptabilisation des numéros attribués pour les USSD
-    numerosAttribuesUSSD.forEach((num) => {
-      allocatedCountMap[num.ussd_id] =
-        (allocatedCountMap[num.ussd_id] || 0) + 1;
-    });
-
+    // 📊 Calcul des statistiques globales
     let totalNumbers = 0;
     let allocatedNumbers = 0;
     const pnnRates = [];
 
-    // Calcul des numéros totaux et attribués pour les PNN
     pnns.forEach((pnn) => {
-      // Vérification si les blocs sont valides avant de procéder
       const count =
         pnn.bloc_min && pnn.block_max ? pnn.block_max - pnn.bloc_min + 1 : 0;
-      const allocated = allocatedCountMap[pnn.id] || 0; // Nombre de numéros attribués
-
+      const allocated = allocatedCountMap[pnn.id] || 0;
       totalNumbers += count;
       allocatedNumbers += allocated;
 
@@ -144,41 +126,49 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       });
     });
 
-    // Calcul des numéros totaux et attribués pour les USSD
-    ussds.forEach((ussd) => {
-      // Vérification si les blocs sont valides avant de procéder
-      const count =
-        ussd.bloc_min && ussd.bloc_max ? ussd.bloc_max - ussd.bloc_min + 1 : 0;
-      const allocated = allocatedCountMap[ussd.id] || 0; // Nombre de numéros attribués
-
-      totalNumbers += count;
-      allocatedNumbers += allocated;
-
-      const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
-
-      pnnRates.push({
-        bloc_id: ussd.id,
-        total_numbers: count,
-        allocated_numbers: allocated,
-        occupancy_rate: occupancyRate.toFixed(2)
-      });
-    });
-
     const remainingNumbers = totalNumbers - allocatedNumbers;
 
+    // 📥 Requête SQL brute pour grouper les numéros attribués par type d'utilisation
+    const replacements = {
+      utilisationId,
+      ...(start && end ? { start, end } : {})
+    };
+
+    const dateFilter =
+      start && end ? `AND na.date_attribution BETWEEN :start AND :end` : "";
+
+    const query = `
+      SELECT 
+        tu.id AS type_utilisation_id,
+        tu.libele_type AS nom_type,
+        COUNT(na.id) AS total_numeros
+      FROM \`NumeroAttribues\` na
+      JOIN \`AttributionNumeros\` an ON an.id = na.attribution_id
+      JOIN \`TypeUtilisations\` tu ON tu.id = an.type_utilisation_id
+      WHERE na.statut = 'attribue'
+        AND an.utilisation_id = :utilisationId
+        ${dateFilter}
+      GROUP BY tu.id, tu.libele_type
+      ORDER BY total_numeros DESC
+    `;
+
+    const [numerosParType] = await sequelize.query(query, { replacements });
+
+    // ✅ Réponse finale
     return res.json({
       success: true,
       data: {
-        nom: nom,
+        nom: utilisation.nom,
         total_numbers: totalNumbers,
         allocated_numbers: allocatedNumbers,
         remaining_numbers: remainingNumbers,
-        pnn_rates: pnnRates
+        pnn_rates: pnnRates,
+        numeros_par_type_utilisation: numerosParType
       }
     });
   } catch (error) {
     console.error("Erreur :", error);
-    return res.json({
+    return res.status(500).json({
       success: false,
       message: "Erreur serveur"
     });
@@ -202,14 +192,8 @@ const getAttributionDecisions = async (where = {}) => {
     attributes: ["type_decision", "date_attribution"]
   });
 
-  // Récupérer les décisions USSD
-  const ussdDecisions = await UssdDecision.findAll({
-    where,
-    attributes: ["type_decision", "date_attribution"]
-  });
-
   // Fusionner les décisions d'attribution et USSD
-  const allDecisions = [...decisions, ...ussdDecisions];
+  const allDecisions = decisions;
 
   const decisionCount = {
     modification: [],
@@ -242,10 +226,10 @@ const getAttributionDecisions = async (where = {}) => {
 
 const getAttributionCoutDecisions = async (where) => {
   // Requêtes vers les deux tables
-  const [attribDecisions, ussdDecisions] = await Promise.all([
-    AttributionDecision.findAll({ where, attributes: ["type_decision"] }),
-    UssdDecision.findAll({ where, attributes: ["type_decision"] })
-  ]);
+  const attribDecisions = await AttributionDecision.findAll({
+    where,
+    attributes: ["type_decision"]
+  });
 
   // Structure de comptage initialisée
   const decisionCount = {
@@ -260,7 +244,7 @@ const getAttributionCoutDecisions = async (where) => {
   };
 
   // Fusion des deux tableaux
-  const allDecisions = [...attribDecisions, ...ussdDecisions];
+  const allDecisions = attribDecisions;
 
   // Comptage
   allDecisions.forEach((d) => {
@@ -279,48 +263,35 @@ const getDecisionsByYear = async () => {
     attributes: ["type_decision", "date_attribution"]
   });
 
-  // Récupérer toutes les décisions USSD sans filtrage spécifique
-  const ussdDecisions = await UssdDecision.findAll({
-    attributes: ["type_decision", "date_attribution"]
-  });
-
-  // Combiner les décisions des deux sources dans un seul objet
+  // Objet pour stocker le comptage des décisions par année
   const decisionCountByYear = {};
 
-  const combineDecisions = (decisions) => {
-    decisions.forEach((d) => {
-      const type = d.type_decision?.toLowerCase();
-      const date = new Date(d.date_attribution);
-      const year = date.getFullYear(); // Ex: 2025
-      const month = String(date.getMonth() + 1).padStart(2, "0"); // Ex: "04" pour avril
-      const formattedDate = `${year}-${month}`;
+  attribDecisions.forEach((d) => {
+    const type = d.type_decision?.toLowerCase();
+    const date = new Date(d.date_attribution);
+    const year = date.getFullYear(); // Ex: 2025
 
-      // Initialiser la structure pour l'année si elle n'existe pas
-      if (!decisionCountByYear[year]) {
-        decisionCountByYear[year] = {
-          modification: 0,
-          reclamation: 0,
-          suspension: 0,
-          attribution: 0,
-          retrait: 0,
-          reservation: 0,
-          renouvellement: 0,
-          résiliation: 0
-        };
-      }
+    // Initialiser la structure pour l'année si elle n'existe pas
+    if (!decisionCountByYear[year]) {
+      decisionCountByYear[year] = {
+        modification: 0,
+        reclamation: 0,
+        suspension: 0,
+        attribution: 0,
+        retrait: 0,
+        reservation: 0,
+        renouvellement: 0,
+        résiliation: 0
+      };
+    }
 
-      // Si le type de décision existe, incrémenter le count pour cette année
-      if (decisionCountByYear[year].hasOwnProperty(type)) {
-        decisionCountByYear[year][type]++;
-      }
-    });
-  };
+    // Si le type de décision existe, incrémenter le count pour cette année
+    if (decisionCountByYear[year].hasOwnProperty(type)) {
+      decisionCountByYear[year][type]++;
+    }
+  });
 
-  // Combiner les deux ensembles de décisions (attribDecisions et ussdDecisions)
-  combineDecisions(attribDecisions);
-  combineDecisions(ussdDecisions);
-
-  // Retourner toutes les années dans l'objet `decisionCountByYear`
+  // Retourner les décisions regroupées par année
   return decisionCountByYear;
 };
 
@@ -377,44 +348,30 @@ const getDecisionPertinente = (decisions) => {
   return sorted.find((d) => d.type_decision === "attribution") || sorted[0];
 };
 // Exemple d'une fonction pour récupérer les numéros
-const getNumbers = async (attributionWhere) => {
+const getNumbers = async (attributionWhere = {}) => {
   try {
-    // Si attributionWhere est vide ou non défini, on peut définir des valeurs par défaut pour éviter l'erreur.
-    if (!attributionWhere || Object.keys(attributionWhere).length === 0) {
-      attributionWhere = {}; // Appliquer un filtre par défaut ou tout inclure si vide
+    if (Object.keys(attributionWhere).length === 0) {
       console.log("Aucun critère spécifié. Filtrage par défaut appliqué.");
     }
 
     // Récupération des numéros attribués via NumeroAttribue
     const numerosAttribuesPNN = await NumeroAttribue.findAll({
       where: attributionWhere,
-      attributes: ["id", "pnn_id", "statut", "utilisation_id"] // Ajuste les attributs selon tes besoins
+      attributes: ["id", "pnn_id", "statut", "utilisation_id"]
     });
 
-    // Récupération des numéros attribués via UssdAttribuer
-    const numerosAttribuesUSSD = await UssdAttribuer.findAll({
-      where: attributionWhere,
-      attributes: ["id", "ussd_id", "statut", "utilisation_id"] // Ajuste les attributs selon tes besoins
-    });
+    const allNumbers = numerosAttribuesPNN;
 
-    // Fusionner les résultats des deux modèles dans un seul tableau
-    const allNumbers = [...numerosAttribuesPNN, ...numerosAttribuesUSSD];
-
-    // Si aucun numéro n'est trouvé, afficher un avertissement
     if (allNumbers.length === 0) {
       console.warn("Aucun numéro trouvé pour les critères spécifiés.");
     }
 
-    // Retourner les numéros fusionnés
     return allNumbers;
   } catch (error) {
-    // Log de l'erreur pour comprendre ce qui s'est passé
     console.error(
-      "Erreur lors de la récupération des numéros : ",
+      "Erreur lors de la récupération des numéros :",
       error.message
     );
-
-    // Optionnel : inclure les critères dans le message d'erreur pour plus de clarté
     throw new Error(
       `Erreur lors de la récupération des numéros avec les critères ${JSON.stringify(
         attributionWhere
@@ -436,12 +393,8 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
         }
       ]
     });
-    const ussds = await USSD.findAll({
-      attributes: ["id", "bloc_min", "bloc_max", "utilisation_id"],
-      include: [{ model: Utilisation, attributes: ["id", "nom"] }]
-    });
 
-    const allEntities = [...pnns, ...ussds];
+    const allEntities = pnns;
     // === FILTRES ===
     const createdAtWhere = {}; // pour getNumbers
     const dateAttributionWhere = {}; // pour getAttributionDecisions

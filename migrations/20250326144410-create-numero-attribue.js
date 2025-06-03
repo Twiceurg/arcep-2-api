@@ -46,9 +46,26 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
+      zone_utilisation_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "ZoneUtilisations",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
+      },
       statut: {
-        type: Sequelize.ENUM('libre', 'attribue','suspendu','retiré','résiliation','reservation'),
-        defaultValue: 'libre',
+        type: Sequelize.ENUM(
+          "libre",
+          "attribue",
+          "suspendu",
+          "retiré",
+          "résiliation",
+          "reservation"
+        ),
+        defaultValue: "libre",
         allowNull: false
       },
       created_at: {

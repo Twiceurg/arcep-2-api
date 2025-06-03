@@ -19,6 +19,9 @@ module.exports = (sequelize, DataTypes) => {
       NumeroAttribue.belongsTo(models.Utilisation, {
         foreignKey: "utilisation_id"
       });
+      NumeroAttribue.belongsTo(models.ZoneUtilisation, {
+        foreignKey: "zone_utilisation_id"
+      });
     }
   }
   NumeroAttribue.init(
@@ -39,6 +42,10 @@ module.exports = (sequelize, DataTypes) => {
           model: "Utilisations",
           key: "id"
         }
+      },
+      zone_utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
       },
       date_attribution: {
         type: DataTypes.DATEONLY,
