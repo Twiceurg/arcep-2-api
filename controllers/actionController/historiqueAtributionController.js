@@ -386,7 +386,7 @@ const historiqueAttributionController = {
           date_attribution: historique.date_debut,
           date_expiration: additionalData.date_expiration || null,
           duree_utilisation: additionalData.duree_utilisation || null,
-          etat_autorisation: true,
+          etat_autorisation: false,
           fichier: decision_file_url || null,
           type_decision: decisionType
         });
@@ -426,7 +426,9 @@ const historiqueAttributionController = {
             "actif",
             {
               date_expiration: lastAttributionDecision.date_expiration,
-              duree_utilisation: lastAttributionDecision.duree_utilisation
+              duree_utilisation:
+                lastAttributionDecision.duree_utilisation.Array,
+              etat_autorisation: true
             }
           );
 

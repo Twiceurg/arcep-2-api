@@ -113,14 +113,14 @@ class AttributionNumeroController {
         include: [{ model: AttributionNumero, include: [Client] }]
       });
 
-      // Vérifier conflits dans UssdAttribuer
-      const ussdConflicts = await UssdAttribuer.findAll({
-        where: {
-          ussd_attribue: { [Op.in]: validNumbers },
-          statut: { [Op.ne]: "libre" }
-        },
-        include: [{ model: USSDAttribution, include: [Client] }]
-      });
+      // // Vérifier conflits dans UssdAttribuer
+      // const ussdConflicts = await UssdAttribuer.findAll({
+      //   where: {
+      //     ussd_attribue: { [Op.in]: validNumbers },
+      //     statut: { [Op.ne]: "libre" }
+      //   },
+      //   include: [{ model: USSDAttribution, include: [Client] }]
+      // });
 
       const conflicts = [];
 
@@ -132,13 +132,13 @@ class AttributionNumeroController {
         );
       });
 
-      ussdConflicts.forEach((entry) => {
-        const clientName =
-          entry.USSDAttribution?.Client?.denomination || "client inconnu";
-        conflicts.push(
-          `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD à : ${clientName}`
-        );
-      });
+      // ussdConflicts.forEach((entry) => {
+      //   const clientName =
+      //     entry.USSDAttribution?.Client?.denomination || "client inconnu";
+      //   conflicts.push(
+      //     `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD à : ${clientName}`
+      //   );
+      // });
 
       if (conflicts.length > 0) {
         return res
@@ -260,6 +260,7 @@ class AttributionNumeroController {
 
       const attributions = await AttributionNumero.findAll({
         where: whereConditions,
+        order: [["created_at", "DESC"]],
         include: [
           { model: Client },
           { model: Utilisation },
@@ -267,7 +268,7 @@ class AttributionNumeroController {
           {
             model: AttributionDecision,
 
-            order: [["date_attribution", "ASC"]]
+            order: [["date_attribution", "DESC"]]
           },
           {
             model: Service,
@@ -922,12 +923,12 @@ class AttributionNumeroController {
 
       // Mettre à jour le statut des numéros retirés au lieu de les supprimer
       await NumeroAttribue.update(
-        { statut: "retire" },
+        { statut: "libre" },
         {
           where: {
             attribution_id: attribution.id,
             numero_attribue: { [Op.notIn]: numero_attribue },
-            statut: { [Op.ne]: "retire" }
+            statut: { [Op.ne]: "libre" }
           }
         }
       );
@@ -1608,11 +1609,10 @@ class AttributionNumeroController {
   }
 
   static async getAttributionDecisions(req, res) {
-    const { id } = req.params; // Récupérer l'id depuis les paramètres de la route
+    const { id } = req.params;
 
-    // Vérifier si l'attributionId est défini
     if (!id) {
-      return res.json({
+      return res.status(400).json({
         success: false,
         message: "L'identifiant de l'attribution est requis."
       });
@@ -1620,27 +1620,36 @@ class AttributionNumeroController {
 
     try {
       const decisions = await AttributionDecision.findAll({
-        where: { attribution_id: id } // Utiliser 'id' ici
+        where: { attribution_id: id },
+        include: [
+          {
+            model: AttributionNumero,
+            include: [
+              {
+                model: NumeroAttribue
+              }
+            ]
+          }
+        ],
+        order: [["date_attribution", "DESC"]]
       });
 
-      // Vérifier si des décisions existent
-      if (decisions.length === 0) {
+      if (!decisions || decisions.length === 0) {
         return res.status(404).json({
           success: false,
           message: "Aucune décision trouvée pour cette attribution."
         });
       }
 
-      // Retourner les décisions sous forme de JSON
       return res.status(200).json({
         success: true,
-        data: decisions.map((decision) => decision.toJSON()) // Convertir chaque instance en JSON
+        data: decisions.map((decision) => decision.toJSON())
       });
     } catch (error) {
       console.error("Erreur lors de la récupération des décisions :", error);
       return res.status(500).json({
         success: false,
-        message: "Erreur lors de la récupération des décisions."
+        message: "Erreur serveur lors de la récupération des décisions."
       });
     }
   }

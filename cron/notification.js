@@ -218,6 +218,14 @@ const verifierExpirationEtEnvoyerNotifications = async () => {
         date_expiration: {
           [Sequelize.Op.ne]: null // Vérifier que la date d'expiration existe
         },
+        type_decision: {
+          [Sequelize.Op.in]: [
+            "attribution",
+            "renouvellement",
+            "suspension",
+            "reservation"
+          ]
+        },
         [Sequelize.Op.or]: [
           { etat_autorisation: false }, // Vérifier les décisions non autorisées
           { etat_autorisation: true }
@@ -235,113 +243,71 @@ const verifierExpirationEtEnvoyerNotifications = async () => {
       ]
     });
 
-    if (decisionsToNotify.length > 0) {
-      const decisionsGroupedByAttribution = {};
+    // Décision à notifier définie
+    if (decisionsToNotify && decisionsToNotify.date_expiration) {
+      const dateExpiration = moment(decisionsToNotify.date_expiration);
+      const today = moment();
+      const diff = moment.duration(dateExpiration.diff(today));
 
-      // Regrouper les décisions en fonction de leur attribution_id
-      decisionsToNotify.forEach((decision) => {
-        const attributionId = decision.attribution_id;
+      if (dateExpiration.isBefore(today) || diff.asMonths() <= 3) {
+        let message;
+        let timeRemaining;
 
-        if (!decisionsGroupedByAttribution[attributionId]) {
-          decisionsGroupedByAttribution[attributionId] = [];
-        }
-
-        decisionsGroupedByAttribution[attributionId].push(decision);
-      });
-
-      // Vérifier chaque groupe de décisions
-      for (const attributionId in decisionsGroupedByAttribution) {
-        const decisions = decisionsGroupedByAttribution[attributionId];
-        const decision = decisions[0];
-
-        const clientName =
-          decision.AttributionNumero && decision.AttributionNumero.Client
-            ? decision.AttributionNumero.Client.denomination
-            : "Nom du client non trouvé";
-        let decisionToNotify = null;
-
-        const activeRenewalDecisions = decisions.filter(
-          (decision) =>
-            decision.type_decision === "renouvellement" &&
-            decision.etat_autorisation === true
-        );
-
-        if (activeRenewalDecisions.length > 0) {
-          activeRenewalDecisions.sort((a, b) =>
-            moment(b.date_expiration).diff(moment(a.date_expiration))
-          );
-          decisionToNotify = activeRenewalDecisions[0];
+        if (dateExpiration.isBefore(today)) {
+          message = `La décision de type ${decisionsToNotify.type_decision} pour la référence ${decisionsToNotify.reference_decision} a expiré pour le client ${clientName}. Veuillez procéder au renouvellement.`;
         } else {
-          const attributionDecision = decisions.find(
-            (decision) => decision.type_decision === "attribution"
-          );
-          decisionToNotify = attributionDecision;
-        }
-
-        if (decisionToNotify && decisionToNotify.date_expiration) {
-          const dateExpiration = moment(decisionToNotify.date_expiration);
-          const today = moment();
-          const diff = moment.duration(dateExpiration.diff(today));
-
-          // ✅ Nouvelle condition : on n'envoie que si la décision a expiré OU va expirer dans <= 3 mois
-          if (dateExpiration.isBefore(today) || diff.asMonths() <= 3) {
-            let message;
-            let timeRemaining;
-
-            if (dateExpiration.isBefore(today)) {
-              message = `La décision de type ${decisionToNotify.type_decision} pour la référence ${decisionToNotify.reference_decision} a expiré pour le client ${clientName}. Veuillez procéder au renouvellement.`;
-            } else {
-              if (diff.years() > 0) {
-                timeRemaining = `${diff.years()} an${
-                  diff.years() > 1 ? "s" : ""
-                }`;
-              } else if (diff.months() > 0) {
-                timeRemaining = `${diff.months()} mois`;
-              } else if (diff.days() > 0) {
-                timeRemaining = `${diff.days()} jour${
-                  diff.days() > 1 ? "s" : ""
-                }`;
-              } else {
-                timeRemaining = `${diff.hours()} heure${
-                  diff.hours() > 1 ? "s" : ""
-                }`;
-              }
-
-              message = `La décision de type ${decisionToNotify.type_decision} pour la référence ${decisionToNotify.reference_decision} va expirer dans ${timeRemaining} pour le client ${clientName}. Veuillez procéder au renouvellement.`;
-            }
-
-            const decisionType =
-              decisionToNotify.type_decision === "renouvellement"
-                ? "Renouvellement - Action requise"
-                : "Attribution - Action requise";
-
-            const headerMessage = `${decisionType} - Action requise dans ${timeRemaining}`;
-
-            // Envoi des notifications
-            sendEmailNotificationToAllUsers(
-              "Notification de décision",
-              decisionToNotify.reference_decision,
-              decisionToNotify.type_decision,
-              decisionToNotify.date_expiration,
-              headerMessage,
-              clientName
-            );
-            sendNotificationToAllUsers(message);
-
-            console.log(
-              `Notification envoyée pour la référence ${decisionToNotify.reference_decision}`
-            );
+          if (diff.years() > 0) {
+            timeRemaining = `${diff.years()} an${diff.years() > 1 ? "s" : ""}`;
+          } else if (diff.months() > 0) {
+            timeRemaining = `${diff.months()} mois`;
+          } else if (diff.days() > 0) {
+            timeRemaining = `${diff.days()} jour${diff.days() > 1 ? "s" : ""}`;
           } else {
-            console.log(
-              `Pas de notification : plus de 3 mois restants pour la décision ${decisionToNotify.reference_decision}`
-            );
+            timeRemaining = `${diff.hours()} heure${
+              diff.hours() > 1 ? "s" : ""
+            }`;
+          }
+
+          if (
+            decisionsToNotify.type_decision === "suspension" ||
+            decisionsToNotify.type_decision === "reservation"
+          ) {
+            message = `La décision de type ${decisionsToNotify.type_decision} pour la référence ${decisionsToNotify.reference_decision} va arriver à terme dans ${timeRemaining} pour le client ${clientName}. Veuillez prendre les mesures nécessaires.`;
+          } else {
+            message = `La décision de type ${decisionsToNotify.type_decision} pour la référence ${decisionsToNotify.reference_decision} va expirer dans ${timeRemaining} pour le client ${clientName}. Veuillez procéder au renouvellement.`;
           }
         }
+
+        const decisionTypeMap = {
+          renouvellement: "Renouvellement - Action requise",
+          attribution: "Attribution - Action requise",
+          suspension: "Suspension - Action requise",
+          reservation: "Réservation - Action requise"
+        };
+
+        const headerMessage = `${
+          decisionTypeMap[decisionsToNotify.type_decision] || "Notification"
+        } - Action requise dans ${timeRemaining || "un délai"} `;
+
+        // Envoi des notifications
+        sendEmailNotificationToAllUsers(
+          "Notification de décision",
+          decisionsToNotify.reference_decision,
+          decisionsToNotify.type_decision,
+          decisionsToNotify.date_expiration,
+          headerMessage,
+          clientName
+        );
+        sendNotificationToAllUsers(message);
+
+        console.log(
+          `Notification envoyée pour la référence ${decisionsToNotify.reference_decision}`
+        );
+      } else {
+        console.log(
+          `Pas de notification : plus de 3 mois restants pour la décision ${decisionsToNotify.reference_decision}`
+        );
       }
-    } else {
-      console.log(
-        "Aucune décision proche de l'expiration ou expirée à notifier."
-      );
     }
 
     // Vérification des autres décisions expirées (renouvellement, suspension, réservation)
