@@ -343,6 +343,14 @@ router.get(
   authorizeRole("superadmin", "admin", "user"),
   AttributionNumeroController.getAssignedNumbersByPnn
 );
+
+router.get(
+  "/assigned-numbers/ussd",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  AttributionNumeroController.getAssignedNumbersByUssd
+);
+
 router.get(
   "/attribution/client/:client_id",
   authenticateToken,
@@ -524,7 +532,18 @@ router.get(
   authorizeRole("superadmin", "admin", "user"),
   controller.getAllNumerosAvecAttribution
 );
-
+router.get(
+  "/numeros/count-in-range",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  controller.countAssignedInRange
+);
+router.get(
+  "/numeros/count-by-pnn/:pnnId",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  controller.countAttributionGapByPnn
+);
 
 router.put(
   "/numeros/:id/liberer",
@@ -541,7 +560,6 @@ router.get(
   historiqueAttributionController.getHistoriqueByAttribution
 );
 
-
 router.post(
   "/historique/suspension",
   authorizeRole("superadmin", "admin"),
@@ -552,7 +570,6 @@ router.post(
   ]),
   historiqueAttributionController.appliquerSuspension
 );
-
 
 router.post(
   "/historique/retrait",
@@ -565,7 +582,6 @@ router.post(
   historiqueAttributionController.appliquerRetrait
 );
 
-
 router.post(
   "/historique/resiliation",
   authenticateToken,
@@ -576,8 +592,6 @@ router.post(
   ]),
   historiqueAttributionController.appliquerRésiliation
 );
-
-
 
 router.put(
   "/historique/assign-reference/:id",
@@ -855,5 +869,7 @@ router.delete(
   authorizeRole("superadmin", "admin"),
   RapportUssdController.deleteRapportUssd
 );
+
+router.get("/dashboard/TableauGlobal", dashboardController.TableauRecap);
 
 module.exports = router;

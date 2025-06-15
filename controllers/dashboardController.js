@@ -175,6 +175,207 @@ const getTotalAndRemainingNumbers = async (req, res) => {
   }
 };
 
+const TableauRecap = async (req, res) => {
+  try {
+    const { startDate, endDate, mois, annee, utilisation_id } = req.query;
+
+    let start = null;
+    let end = null;
+
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      end = new Date(endDate);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Format de date invalide" });
+      }
+    } else if (annee && !mois) {
+      const y = parseInt(annee);
+      if (isNaN(y)) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Année invalide" });
+      }
+      start = new Date(y, 0, 1);
+      end = new Date(y, 11, 31, 23, 59, 59);
+    } else if (annee && mois) {
+      const m = parseInt(mois) - 1;
+      const y = parseInt(annee);
+      if (isNaN(y) || isNaN(m) || m < 0 || m > 11) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Mois ou année invalide" });
+      }
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0, 23, 59, 59);
+    } else if (mois && !annee) {
+      const m = parseInt(mois) - 1;
+      const y = new Date().getFullYear();
+      if (isNaN(m) || m < 0 || m > 11) {
+        return res
+          .status(400)
+          .json({ success: false, message: "Mois invalide" });
+      }
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0, 23, 59, 59);
+    }
+
+    let previousYearStart = null;
+    let previousYearEnd = null;
+    if (start && end) {
+      previousYearStart = new Date(start);
+      previousYearStart.setFullYear(previousYearStart.getFullYear() - 1);
+      previousYearEnd = new Date(end);
+      previousYearEnd.setFullYear(previousYearEnd.getFullYear() - 1);
+    }
+
+    const whereAttribue = {
+      statut: { [Op.ne]: "libre" }
+    };
+    if (start && end) {
+      whereAttribue.date_attribution = {
+        [Op.between]: [start, end]
+      };
+    }
+
+    const wherePnn = {};
+    if (utilisation_id) {
+      wherePnn.utilisation_id = utilisation_id;
+    }
+
+    const pnns = await Pnn.findAll({
+      where: wherePnn,
+      attributes: [
+        "id",
+        "bloc_min",
+        "block_max",
+        "partition_length",
+        "utilisation_id",
+        "partition_prefix",
+        "partition_prefix_b"
+      ],
+      include: [
+        {
+          model: Utilisation,
+          attributes: ["id", "nom"]
+        },
+        {
+          model: NumeroAttribue,
+          where: whereAttribue,
+          required: false
+        }
+      ]
+    });
+
+    const pnnsAnneePrecedente = await Pnn.findAll({
+      where: wherePnn,
+      attributes: ["id", "bloc_min", "block_max"],
+      include: [
+        {
+          model: NumeroAttribue,
+          required: false,
+          where:
+            previousYearStart && previousYearEnd
+              ? {
+                  statut: { [Op.ne]: "libre" },
+                  date_attribution: {
+                    [Op.between]: [previousYearStart, previousYearEnd]
+                  }
+                }
+              : {}
+        }
+      ]
+    });
+
+    const totalDisponibleAnneePrecedenteMap = {};
+    pnnsAnneePrecedente.forEach((pnn) => {
+      const blocMin = pnn.bloc_min || 0;
+      const blocMax = pnn.block_max || 0;
+      const total = blocMax >= blocMin ? blocMax - blocMin + 1 : 0;
+      const attribues = pnn.NumeroAttribues?.length || 0;
+      const disponibles = total - attribues;
+      totalDisponibleAnneePrecedenteMap[pnn.id] = disponibles;
+    });
+
+    const totalDisponibleAnneePrecedente = Object.values(
+      totalDisponibleAnneePrecedenteMap
+    ).reduce((sum, val) => sum + val, 0);
+
+    let totalNumbers = 0;
+    let allocatedNumbers = 0;
+    const utilisationMap = {};
+
+    pnns.forEach((pnn) => {
+      const blocMin = pnn.bloc_min || 0;
+      const blocMax = pnn.block_max || 0;
+      const totalInBloc = blocMax >= blocMin ? blocMax - blocMin + 1 : 0;
+      const allocated = pnn.NumeroAttribues?.length || 0;
+
+      totalNumbers += totalInBloc;
+      allocatedNumbers += allocated;
+
+      const utilisationId = pnn.Utilisation?.id || 0;
+      const utilisationName = pnn.Utilisation?.nom || "Inconnu";
+
+      const key = `${utilisationId}||${utilisationName}`;
+
+      if (!utilisationMap[key]) {
+        utilisationMap[key] = [];
+      }
+
+      utilisationMap[key].push({
+        pnn_id: pnn.id,
+        bloc_min: blocMin,
+        block_max: blocMax,
+        partition_prefix: pnn.partition_prefix,
+        partition_length: pnn.partition_length,
+        partition_prefix_b: pnn.partition_prefix_b,
+        total_numbers: totalInBloc,
+        allocated_numbers: allocated,
+        total_disponible_annee_precedente:
+          totalDisponibleAnneePrecedenteMap[pnn.id] || 0,
+        total_ressource_restante: totalInBloc - allocated,
+        occupancy_rate:
+          totalInBloc > 0
+            ? ((allocated / totalInBloc) * 100).toFixed(2)
+            : "0.00"
+      });
+    });
+
+    const utilisationSummary = Object.entries(utilisationMap).map(
+      ([key, pnns]) => {
+        const [utilisationId, utilisationName] = key.split("||");
+        const totalAttribues = pnns.reduce(
+          (sum, pnn) => sum + pnn.allocated_numbers,
+          0
+        );
+        return {
+          utilisation_id: parseInt(utilisationId),
+          utilisation: utilisationName,
+          total_attribues: totalAttribues,
+          pnns
+        };
+      }
+    );
+
+    return res.json({
+      success: true,
+      data: {
+        total_numbers: totalNumbers,
+        allocated_numbers: allocatedNumbers,
+        remaining_numbers: totalNumbers - allocatedNumbers,
+        utilisation_summary: utilisationSummary,
+        total_disponible_annee_precedente: totalDisponibleAnneePrecedente
+      }
+    });
+  } catch (error) {
+    console.error("Erreur TableauRecap :", error);
+    return res.status(500).json({ success: false, message: "Erreur serveur" });
+  }
+};
+
+
 // Fonction pour récupérer les décisions associées aux attributions
 const getAttributionDecisions = async (where = {}) => {
   // Appliquer un filtre par défaut sur l'année en cours si pas de filtre date_attribution
@@ -385,7 +586,14 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
     const { startDate, endDate, mois, annee, type_decision } = req.query;
 
     const pnns = await Pnn.findAll({
-      attributes: ["id", "bloc_min", "block_max", "utilisation_id"],
+      attributes: [
+        "id",
+        "bloc_min",
+        "partition_prefix_b",
+        "partition_prefix",
+        "block_max",
+        "utilisation_id"
+      ],
       include: [
         {
           model: Utilisation,
@@ -529,17 +737,15 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       let groupTotalNumbers = 0;
       let groupAllocatedNumbers = 0;
       const groupEntityRates = [];
+      const groupPartitions = [];
 
       group.entities.forEach((entity) => {
-        // Vérification des valeurs de bloc avant de calculer le total des numéros
         const blocMin = entity.bloc_min;
-        const blocMax = entity.block_max || entity.bloc_max; // 'block_max' pour PNN, 'bloc_max' pour USSD
+        const blocMax = entity.block_max || entity.block_max;
 
-        // Calcul du nombre de numéros dans la plage
         const count =
-          blocMin && blocMax && blocMin <= blocMax ? blocMax - blocMin + 1 : 0; // Si l'une des valeurs est invalide, on met 0 comme valeur
+          blocMin && blocMax && blocMin <= blocMax ? blocMax - blocMin + 1 : 0;
 
-        // Comptabilisation des numéros attribués
         const allocated = allocatedCountMap[entity.id] || 0;
 
         groupTotalNumbers += count;
@@ -547,35 +753,32 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
 
         const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
 
-        // Traitement spécifique pour PNN
-        if (entity.NumeroAttribues) {
-          groupEntityRates.push({
-            entity_id: entity.id,
-            total_numbers: count,
-            allocated_numbers: allocated,
-            occupancy_rate: occupancyRate.toFixed(2),
-            decision: getDecisionPertinente(
-              entity.NumeroAttribues
-                ? entity.NumeroAttribues.flatMap((num) => num.Decisions)
-                : []
-            )
+        // Décisions uniquement depuis PNN
+        const numerosNonLibres =
+          entity.NumeroAttribues?.filter((num) => num.statut !== "libre") || [];
+        const decisions = numerosNonLibres.flatMap(
+          (num) => num.Decisions || []
+        );
+
+        // Récupération des partitions directement dans entity
+        const partitions = [];
+        if (entity.partition_prefix || entity.partition_prefix_b) {
+          partitions.push({
+            prefix: entity.partition_prefix,
+            prefix_b: entity.partition_prefix_b
           });
         }
 
-        // Traitement spécifique pour USSD
-        if (entity.UssdAttribuer) {
-          groupEntityRates.push({
-            entity_id: entity.id,
-            total_numbers: count,
-            allocated_numbers: allocated,
-            occupancy_rate: occupancyRate.toFixed(2),
-            decision: getDecisionPertinente(
-              entity.UssdAttribuer
-                ? entity.UssdAttribuer.flatMap((num) => num.Decisions)
-                : []
-            )
-          });
-        }
+        groupPartitions.push(...partitions);
+
+        groupEntityRates.push({
+          entity_id: entity.id,
+          total_numbers: count,
+          allocated_numbers: allocated,
+          occupancy_rate: occupancyRate.toFixed(2),
+          decision: getDecisionPertinente(decisions),
+          partitions
+        });
       });
 
       totalNumbers += groupTotalNumbers;
@@ -593,7 +796,8 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
         allocated_numbers: groupAllocatedNumbers,
         remaining_numbers: groupTotalNumbers - groupAllocatedNumbers,
         occupancy_rate: groupOccupancyRate.toFixed(2),
-        entity_rates: groupEntityRates
+        entity_rates: groupEntityRates,
+        partitions: groupPartitions
       });
     });
 
@@ -714,5 +918,6 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
 
 module.exports = {
   getTotalAndRemainingNumbers,
-  getAllTotalAndRemainingNumbers
+  getAllTotalAndRemainingNumbers,
+  TableauRecap
 };

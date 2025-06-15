@@ -101,3 +101,119 @@ exports.libererNumeroAttribue = async (req, res) => {
     });
   }
 };
+
+exports.countAssignedInRange = async (req, res) => {
+  try {
+    const { bloc_min, bloc_max } = req.query;
+
+    if (!bloc_min || !bloc_max) {
+      return res.status(400).json({
+        message: "Les paramètres bloc_min et bloc_max sont requis"
+      });
+    }
+
+    const count = await NumeroAttribue.count({
+      where: {
+        numero_attribue: {
+          [Op.between]: [bloc_min, bloc_max]
+        },
+        statut: {
+          [Op.not]: "libre"
+        },
+        pnn_id: {
+          [Op.and]: {
+            [Op.ne]: null,
+            [Op.ne]: ""
+          }
+        }
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      assignedCount: count
+    });
+  } catch (error) {
+    console.error("Erreur lors du comptage des numéros dans la plage :", error);
+    return res.status(500).json({ message: "Erreur interne du serveur" });
+  }
+};
+
+exports.countAttributionGapByPnn = async (req, res) => {
+  try {
+    const { pnnId } = req.params;
+
+    if (!pnnId) {
+      return res.json({ success: false,message: "pnnId est requis" });
+    }
+
+    // 1. Nombre d'attributions pour le PNN sélectionné
+    const selectedCount = await NumeroAttribue.count({
+      where: {
+        pnn_id: pnnId,
+        statut: { [Op.not]: "libre" },
+        numero_attribue: {
+          [Op.and]: {
+            [Op.ne]: null,
+            [Op.ne]: ""
+          }
+        }
+      }
+    });
+
+    // 2. Attributions pour tous les autres PNN
+    const allCounts = await NumeroAttribue.findAll({
+      attributes: [
+        "pnn_id",
+        [
+          NumeroAttribue.sequelize.fn(
+            "COUNT",
+            NumeroAttribue.sequelize.col("id")
+          ),
+          "count"
+        ]
+      ],
+      where: {
+        pnn_id: { [Op.ne]: pnnId },
+        statut: { [Op.not]: "libre" },
+        numero_attribue: {
+          [Op.and]: {
+            [Op.ne]: null,
+            [Op.ne]: ""
+          }
+        }
+      },
+      group: ["pnn_id"]
+    });
+
+    let hasGap = false;
+    let details = [];
+
+    // 3. Comparaison avec chaque autre PNN
+    for (const item of allCounts) {
+      const otherCount = parseInt(item.dataValues.count);
+      const ecart = selectedCount - otherCount;
+
+      if (ecart > 5) {
+        hasGap = true;
+        details.push({
+          pnn_compare_id: item.pnn_id,
+          ecart
+        });
+      }
+    }
+
+    return res .json({
+      success: true,
+      selectedPnnAttributionCount: selectedCount,
+      hasGap,
+      message: hasGap
+        ? "Le PNN sélectionné dépasse certains autres PNN de plus de 5 attributions."
+        : "Pas d'écart important détecté.",
+      details // contient les pnn_id comparés et les écarts
+    });
+  } catch (error) {
+    console.error("Erreur lors de la vérification d'écart entre PNN :", error);
+    return res.json({success: false, message: "Erreur interne du serveur" });
+  }
+};

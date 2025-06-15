@@ -10,9 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       AttributionNumero.belongsTo(models.Client, { foreignKey: "client_id" });
       AttributionNumero.belongsTo(models.Service, { foreignKey: "service_id" });
-      AttributionNumero.belongsTo(models.TypeUtilisation, {
-        foreignKey: "type_utilisation_id"
-      });
+
       AttributionNumero.belongsTo(models.Pnn, { foreignKey: "pnn_id" });
       AttributionNumero.belongsTo(models.Utilisation, {
         foreignKey: "utilisation_id"
@@ -39,6 +37,11 @@ module.exports = (sequelize, DataTypes) => {
       });
       AttributionNumero.hasMany(models.HistoriqueAttributionNumero, {
         foreignKey: "attribution_id"
+      });
+      AttributionNumero.belongsToMany(models.TypeUtilisation, {
+        through: "TypeUtilisationAttributionNumeros",
+        foreignKey: "attribution_numero_id",
+        otherKey: "type_utilisation_id"
       });
     }
   }

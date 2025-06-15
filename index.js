@@ -16,7 +16,8 @@ const io = socketIo(server, {
     origin: [
       "http://localhost:3001",
       "http://192.168.95.27:3001",
-      "http://192.168.95.27:3008"
+      "http://192.168.95.27:3008",
+      "http://192.168.1.100:3001"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -28,7 +29,11 @@ setIo(io); // <--- assigner l'instance ici
 
 app.use(
   cors({
-    origin: ["http://localhost:3001", "http://192.168.95.27:3001"],
+    origin: [
+      "http://localhost:3001",
+      "http://192.168.95.27:3001",
+      "http://192.168.1.100:3001"
+    ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
     credentials: true

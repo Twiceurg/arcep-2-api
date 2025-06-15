@@ -39,7 +39,10 @@ const historiqueAttributionController = {
               { model: Client },
               { model: Utilisation },
 
-              { model: TypeUtilisation },
+               {
+            model: TypeUtilisation,
+            through: { attributes: [] } 
+          },
               {
                 model: Pnn,
                 include: [{ model: Utilisation }]
@@ -386,7 +389,7 @@ const historiqueAttributionController = {
           date_attribution: historique.date_debut,
           date_expiration: additionalData.date_expiration || null,
           duree_utilisation: additionalData.duree_utilisation || null,
-          etat_autorisation: false,
+          etat_autorisation: additionalData.etat_autorisation ?? false,
           fichier: decision_file_url || null,
           type_decision: decisionType
         });
@@ -426,8 +429,8 @@ const historiqueAttributionController = {
             "actif",
             {
               date_expiration: lastAttributionDecision.date_expiration,
-              duree_utilisation:
-                lastAttributionDecision.duree_utilisation.Array,
+              duree_utilisation: lastAttributionDecision.duree_utilisation,
+              fichier: decision_file_url,
               etat_autorisation: true
             }
           );

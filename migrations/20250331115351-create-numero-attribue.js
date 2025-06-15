@@ -36,6 +36,17 @@ module.exports = {
         onUpdate: "CASCADE",
         onDelete: "SET NULL"
       },
+
+      decision_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "AttributionDecisions", // Remplace par le nom exact de ta table de décisions
+          key: "id"
+        },
+        onDelete: "CASCADE",
+        onUpdate: "CASCADE"
+      },
       utilisation_id: {
         type: Sequelize.INTEGER,
         allowNull: true,

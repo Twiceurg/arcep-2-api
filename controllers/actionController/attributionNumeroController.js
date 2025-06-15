@@ -43,6 +43,18 @@ class AttributionNumeroController {
         zone_utilisation_id
       } = req.body;
 
+      if (
+        !type_utilisation_id ||
+        !Array.isArray(type_utilisation_id) ||
+        type_utilisation_id.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Le champ type_utilisation_id est requis et doit être un tableau non vide"
+        });
+      }
+
       // Validation : tableau des numéros
       if (
         !numero_attribue ||
@@ -105,11 +117,19 @@ class AttributionNumeroController {
       }
 
       // Vérifier conflits dans NumeroAttribue
+      // Préparer la clause WHERE selon le type d'utilisation
+      const numeroWhereClause = {
+        numero_attribue: { [Op.in]: validNumbers },
+        statut: { [Op.ne]: "libre" }
+      };
+
+      // Si c'est une attribution USSD (utilisation_id === 15), on filtre aussi par utilisation_id
+      if (utilisation_id === "15") {
+        numeroWhereClause.utilisation_id = 15;
+      }
+
       const numeroConflicts = await NumeroAttribue.findAll({
-        where: {
-          numero_attribue: { [Op.in]: validNumbers },
-          statut: { [Op.ne]: "libre" }
-        },
+        where: numeroWhereClause,
         include: [{ model: AttributionNumero, include: [Client] }]
       });
 
@@ -148,7 +168,7 @@ class AttributionNumeroController {
 
       // Création de l'attribution
       const attribution = await AttributionNumero.create({
-        type_utilisation_id,
+        // type_utilisation_id,
         service_id,
         pnn_id: pnn_id || null,
         client_id,
@@ -158,6 +178,8 @@ class AttributionNumeroController {
         etat_autorisation: false,
         utilisation_id
       });
+
+      await attribution.setTypeUtilisations(type_utilisation_id);
 
       // Création des entrées NumeroAttribue
       const numeroAttribueEntries = numero_attribue.map((numero) => ({
@@ -274,18 +296,21 @@ class AttributionNumeroController {
             model: Service,
             include: [{ model: Category }]
           },
-          { model: TypeUtilisation },
+          {
+            model: TypeUtilisation,
+            through: { attributes: [] }
+          },
           {
             model: Pnn,
             include: [{ model: Utilisation }]
           },
           {
-            model: NumeroAttribue,
-            where: {
-              statut: {
-                [Op.notIn]: ["Retiré", "Résiliation"]
-              }
-            }
+            model: NumeroAttribue
+            // where: {
+            //   statut: {
+            //     [Op.notIn]: ["Retiré", "Résiliation"]
+            //   }
+            // }
           },
           { model: Rapport }
         ]
@@ -505,7 +530,10 @@ class AttributionNumeroController {
             model: Service,
             include: [{ model: Category }]
           },
-          { model: TypeUtilisation },
+          {
+            model: TypeUtilisation,
+            through: { attributes: [] }
+          },
           {
             model: Pnn,
             include: [{ model: Utilisation }]
@@ -640,7 +668,10 @@ class AttributionNumeroController {
             include: [
               { model: Client },
               { model: Service },
-              { model: TypeUtilisation },
+              {
+                model: TypeUtilisation,
+                through: { attributes: [] }
+              },
               { model: Pnn },
               { model: Utilisation },
               { model: NumeroAttribue },
@@ -733,7 +764,10 @@ class AttributionNumeroController {
         include: [
           { model: Client },
           { model: Service },
-          { model: TypeUtilisation },
+          {
+            model: TypeUtilisation,
+            through: { attributes: [] }
+          },
           {
             model: Pnn,
             include: [{ model: Utilisation }]
@@ -832,19 +866,13 @@ class AttributionNumeroController {
         reference_decision
       } = req.body;
 
-      const file = req.file;
+      const fichierUrl = req.files?.fichier
+        ? `/uploads/${req.files.fichier[0].filename}`
+        : null;
 
-      // if (
-      //   !numero_attribue ||
-      //   !Array.isArray(numero_attribue) ||
-      //   numero_attribue.length === 0
-      // ) {
-      //   return res.json({
-      //     success: false,
-      //     message:
-      //       "Le tableau des numéros attribués est requis et doit être un tableau non vide"
-      //   });
-      // }
+      const decisionFileUrl = req.files?.decision_file_url
+        ? `/uploads/${req.files.decision_file_url[0].filename}`
+        : null;
 
       const attribution = await AttributionNumero.findByPk(id, {
         include: [{ model: AttributionDecision }]
@@ -869,19 +897,18 @@ class AttributionNumeroController {
           .json({ success: false, message: "PNN introuvable" });
       }
 
-      // Vérifier validité des numéros dans la plage
-      // for (const numero of numero_attribue) {
-      //   if (numero < pnn.bloc_min || numero > pnn.block_max) {
-      //     return res.json({
-      //       success: false,
-      //       message: `Le numéro ${numero} est en dehors de la plage autorisée`
-      //     });
-      //   }
-      // }
-
       // Récupérer tous les numéros déjà attribués dans la base, quel que soit le statut
+      // Clause WHERE adaptée à l'utilisation
+      const numeroAttribueWhere = {
+        numero_attribue: { [Op.in]: numero_attribue }
+      };
+
+      if (utilisation_id === "15") {
+        numeroAttribueWhere.utilisation_id = 15;
+      }
+
       const existingNumbers = await NumeroAttribue.findAll({
-        where: { numero_attribue: { [Op.in]: numero_attribue } }
+        where: numeroAttribueWhere
       });
 
       // Nums déjà attribués à cette attribution
@@ -961,13 +988,6 @@ class AttributionNumeroController {
       }));
 
       await HistoriqueAttributionNumero.bulkCreate(historiqueEntries);
-
-      const fichierUrl = req.files?.fichier
-        ? `/uploads/${req.files.fichier[0].filename}`
-        : null;
-      const decisionFileUrl = req.files?.decision_file
-        ? `/uploads/${req.files.decision_file_url[0].filename}`
-        : null;
 
       const historique = await HistoriqueAttribution.create({
         attribution_id: attribution.id,
@@ -1068,6 +1088,43 @@ class AttributionNumeroController {
       return res.status(500).json({ error: "Erreur interne du serveur." });
     }
   }
+  
+  static async getAssignedNumbersByUssd(req, res) {
+    try {
+      const attributions = await AttributionNumero.findAll({
+        where: {
+          utilisation_id: 15
+        },
+        attributes: ["id"]
+      });
+
+      if (!attributions || attributions.length === 0) {
+        return res.json({ success: false }); // Pas d'attributions
+      }
+
+      const attributionIds = attributions.map((a) => a.id);
+
+      const assignedNumbers = await NumeroAttribue.findAll({
+        where: {
+          attribution_id: { [Op.in]: attributionIds },
+          statut: { [Op.ne]: "libre" }
+        },
+        attributes: ["numero_attribue"]
+      });
+
+      if (!assignedNumbers || assignedNumbers.length === 0) {
+        return res.json({ success: false }); // Pas de numéros attribués
+      }
+
+      return res.json({ success: true }); // Succès
+    } catch (error) {
+      console.error(
+        "Erreur lors de la récupération des numéros USSD attribués :",
+        error
+      );
+      return res.json({ success: false }); // Erreur = échec
+    }
+  }
 
   // 📌 Récupérer toutes les attributions d'un client par son ID
   static async getAttributionByClientId(req, res) {
@@ -1083,7 +1140,10 @@ class AttributionNumeroController {
         where: { client_id },
         include: [
           { model: Service },
-          { model: TypeUtilisation },
+          {
+            model: TypeUtilisation,
+            through: { attributes: [] }
+          },
           {
             model: Pnn,
             include: [{ model: Utilisation }]
@@ -1092,27 +1152,8 @@ class AttributionNumeroController {
         ]
       });
 
-      // Attributions USSD
-      const ussdAttributions = await USSDAttribution.findAll({
-        where: { client_id },
-        include: [
-          { model: Client },
-          { model: USSD, include: [{ model: Utilisation }] },
-          { model: UssdAttribuer },
-
-          { model: TypeUtilisation },
-          { model: RapportUssd },
-          { model: UssdRenouvellement },
-          { model: UssdDecision },
-          { model: UssdAttributionHistorique }
-        ]
-      });
-
       // Vérifie s’il y a au moins une attribution
-      if (
-        (!attributions || attributions.length === 0) &&
-        (!ussdAttributions || ussdAttributions.length === 0)
-      ) {
+      if (!attributions || attributions.length === 0) {
         return res.json({
           success: false,
           message: "Aucune attribution trouvée pour ce client"
