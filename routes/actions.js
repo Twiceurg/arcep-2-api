@@ -545,6 +545,19 @@ router.get(
   controller.countAttributionGapByPnn
 );
 
+router.get(
+  "/ussd/count-by-digit-prefix",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  controller.countUssdAssignedByDigitAndPrefix
+);
+
+router.get(
+  "/ussd/gap-by-digit-prefix",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  controller.countUssdGapByDigitAndPrefix
+);
 router.put(
   "/numeros/:id/liberer",
   authenticateToken,

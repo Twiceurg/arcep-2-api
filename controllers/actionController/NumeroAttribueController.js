@@ -144,7 +144,7 @@ exports.countAttributionGapByPnn = async (req, res) => {
     const { pnnId } = req.params;
 
     if (!pnnId) {
-      return res.json({ success: false,message: "pnnId est requis" });
+      return res.json({ success: false, message: "pnnId est requis" });
     }
 
     // 1. Nombre d'attributions pour le PNN sélectionné
@@ -203,7 +203,7 @@ exports.countAttributionGapByPnn = async (req, res) => {
       }
     }
 
-    return res .json({
+    return res.json({
       success: true,
       selectedPnnAttributionCount: selectedCount,
       hasGap,
@@ -214,6 +214,150 @@ exports.countAttributionGapByPnn = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur lors de la vérification d'écart entre PNN :", error);
-    return res.json({success: false, message: "Erreur interne du serveur" });
+    return res.json({ success: false, message: "Erreur interne du serveur" });
+  }
+};
+
+// 1. Compter les USSD attribués par digit et prefixe
+exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
+  try {
+    const { digit, prefix } = req.query;
+
+    if (!digit || ![3, 4].includes(Number(digit))) {
+      return res.status(400).json({
+        message: "Le paramètre digit (3 ou 4) est requis"
+      });
+    }
+    if (!prefix) {
+      return res.status(400).json({
+        message: "Le paramètre prefix est requis"
+      });
+    }
+
+    // Générer la plage min et max pour ce prefix et digit
+    const digitInt = Number(digit);
+    const min = prefix.padEnd(digitInt, "0");
+    const max = prefix.padEnd(digitInt, "9");
+
+    const count = await NumeroAttribue.count({
+      where: {
+        numero_attribue: {
+          [Op.between]: [min, max]
+        },
+        statut: { [Op.not]: "libre" },
+        [Op.or]: [{ pnn_id: null }, { pnn_id: "" }],
+        [Op.and]: [
+          NumeroAttribue.sequelize.where(
+            NumeroAttribue.sequelize.fn(
+              "LENGTH",
+              NumeroAttribue.sequelize.col("numero_attribue")
+            ),
+            digitInt
+          )
+        ]
+      }
+    });
+
+    return res.status(200).json({
+      success: true,
+      assignedCount: count,
+      plage: { min, max }
+    });
+  } catch (error) {
+    console.error(
+      "Erreur lors du comptage des USSD par digit et prefix :",
+      error
+    );
+    return res.status(500).json({ message: "Erreur interne du serveur" });
+  }
+};
+
+// 2. Vérifier le "gap" USSD par digit et prefix (1 chiffre)
+exports.countUssdGapByDigitAndPrefix = async (req, res) => {
+  try {
+    const { digit } = req.query;
+    if (!digit || ![3, 4].includes(Number(digit))) {
+      return res.status(400).json({
+        message: "Le paramètre digit (3 ou 4) est requis"
+      });
+    }
+
+    const ussdCounts = await NumeroAttribue.findAll({
+      attributes: [
+        [
+          NumeroAttribue.sequelize.fn(
+            "LEFT",
+            NumeroAttribue.sequelize.col("numero_attribue"),
+            1
+          ),
+          "prefixe"
+        ],
+        [
+          NumeroAttribue.sequelize.fn(
+            "COUNT",
+            NumeroAttribue.sequelize.col("id")
+          ),
+          "count"
+        ]
+      ],
+      where: {
+        statut: { [Op.not]: "libre" },
+        [Op.or]: [{ pnn_id: null }, { pnn_id: "" }],
+        [Op.and]: [
+          NumeroAttribue.sequelize.where(
+            NumeroAttribue.sequelize.fn(
+              "LENGTH",
+              NumeroAttribue.sequelize.col("numero_attribue")
+            ),
+            Number(digit)
+          )
+        ]
+      },
+      group: [
+        NumeroAttribue.sequelize.fn(
+          "LEFT",
+          NumeroAttribue.sequelize.col("numero_attribue"),
+          1
+        )
+      ]
+    });
+
+    let hasGap = false;
+    let details = [];
+
+    for (let i = 0; i < ussdCounts.length; i++) {
+      for (let j = i + 1; j < ussdCounts.length; j++) {
+        const a = ussdCounts[i].dataValues;
+        const b = ussdCounts[j].dataValues;
+        const ecart = Math.abs(a.count - b.count);
+        if (ecart > 5) {
+          hasGap = true;
+          details.push({
+            prefixeA: a.prefixe,
+            countA: a.count,
+            prefixeB: b.prefixe,
+            countB: b.count,
+            ecart
+          });
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      hasGap,
+      message: hasGap
+        ? "Un écart supérieur à 5 a été détecté entre certains groupes USSD (par prefixe et digit)."
+        : "Pas d'écart important détecté.",
+      details
+    });
+  } catch (error) {
+    console.error(
+      "Erreur lors de la vérification d'écart USSD par digit et prefixe :",
+      error
+    );
+    return res
+      .status(500)
+      .json({ success: false, message: "Erreur interne du serveur" });
   }
 };
