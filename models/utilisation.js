@@ -23,7 +23,7 @@ module.exports = (sequelize, DataTypes) => {
         as: "pnns"
       });
       Utilisation.hasMany(models.USSD, {
-        foreignKey: "utilisation_id",
+        foreignKey: "utilisation_id"
       });
 
       Utilisation.hasMany(models.AttributionNumero, {
@@ -36,6 +36,9 @@ module.exports = (sequelize, DataTypes) => {
         foreignKey: "utilisation_id"
       });
       Utilisation.hasMany(models.UssdAttribuer, {
+        foreignKey: "utilisation_id"
+      });
+      Utilisation.hasMany(models.ZoneUtilisation, {
         foreignKey: "utilisation_id"
       });
     }

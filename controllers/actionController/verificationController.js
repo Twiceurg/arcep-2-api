@@ -5,6 +5,8 @@ const {
   AttributionNumero,
   USSDAttribution,
   Client,
+  Service,
+  Category,
   Pnn,
   Utilisation,
   USSD
@@ -33,32 +35,39 @@ async function checkNumeroDisponibilite(req, res) {
         statut: { [Op.ne]: "libre" }
       },
       include: [
-        { model: AttributionNumero, include: [Client] },
-        { model: Pnn, include: [Utilisation] }
+        {
+          model: AttributionNumero,
+          include: [
+            Client,
+            {
+              model: Service,
+              include: [Category]
+            }
+          ]
+        },
+        {
+          model: Pnn,
+          include: [
+            Utilisation,
+            {
+              model: Service,
+              include: [Category]
+            }
+          ]
+        }
       ]
     });
 
-    // Récupérer les conflits d'attribution USSD
-    const ussdConflicts = await UssdAttribuer.findAll({
-      where: {
-        ussd_attribue: { [Op.in]: numeros },
-        statut: { [Op.ne]: "libre" }
-      },
-      include: [
-        { model: USSDAttribution, include: [Client] },
-        { model: USSD, include: [Utilisation] }
-      ]
-    });
-
-    // Récupère tous les blocs valides avec utilisation
+    // Récupère tous les blocs valides avec utilisation, service et catégorie
     const activePnns = await Pnn.findAll({
       where: { etat: true },
-      include: [Utilisation]
-    });
-
-    const activeUssds = await USSD.findAll({
-      where: { etat: true },
-      include: [Utilisation]
+      include: [
+        Utilisation,
+        {
+          model: Service,
+          include: [Category]
+        }
+      ]
     });
 
     const conflicts = [];
@@ -72,19 +81,15 @@ async function checkNumeroDisponibilite(req, res) {
       const utilisationName =
         entry.Pnn?.Utilisation?.nom || "Utilisation inconnue";
 
-      conflicts.push(
-        `Le numéro ${entry.numero_attribue} a déjà été attribué à ${clientName} (${utilisationName})`
-      );
-    }
+      const categoryId = entry.AttributionNumero?.Service?.Category?.id;
 
-    for (const entry of ussdConflicts) {
-      const clientName =
-        entry.USSDAttribution?.Client?.denomination || "client inconnu";
-      const utilisationName =
-        entry.USSD?.Utilisation?.nom || "Utilisation inconnue";
+      let messagePrefix = "Le numéro";
+      if (categoryId === 1) {
+        messagePrefix = "Le bloc";
+      }
 
       conflicts.push(
-        `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD à ${clientName} (${utilisationName})`
+        `${messagePrefix} ${entry.numero_attribue} a déjà été attribué à ${clientName} (${utilisationName})`
       );
     }
 
@@ -100,38 +105,40 @@ async function checkNumeroDisponibilite(req, res) {
         continue;
       }
 
-      const isConflict =
-        numeroConflicts.some(
-          (entry) => String(entry.numero_attribue) === numeroStr
-        ) ||
-        ussdConflicts.some(
-          (entry) => String(entry.ussd_attribue) === numeroStr
-        );
-
       const matchedPnn = activePnns.find(
         (pnn) => numeroInt >= pnn.bloc_min && numeroInt <= pnn.block_max
       );
 
-      const matchedUssd = activeUssds.find(
-        (ussd) => numeroInt >= ussd.bloc_min && numeroInt <= ussd.bloc_max
+      if (!matchedPnn) {
+        outOfRangeNumeros.push(
+          `Le numéro ${numero} ne fait pas partie d’un bloc PNN valide.`
+        );
+        continue; // Important d'arrêter ici pour ce numéro
+      }
+
+      const isConflict = numeroConflicts.some(
+        (entry) => String(entry.numero_attribue) === numeroStr
       );
 
-      if (!isConflict && (matchedPnn || matchedUssd)) {
-        const utilisationName =
-          matchedPnn?.Utilisation?.nom ||
-          matchedUssd?.Utilisation?.nom ||
-          "Utilisation inconnue";
-
-        availableNumeros.push(
-          `Le numéro ${numero} est disponible. (${utilisationName})`
-        );
+      if (isConflict) {
+        // Le message de conflit sera déjà ajouté dans la boucle précédente
+        // Si tu veux ici aussi, tu peux l'ajouter, mais évite la redondance
+        continue;
       }
 
-      if (!matchedPnn && !matchedUssd) {
-        outOfRangeNumeros.push(
-          `Le numéro ${numero} ne fait pas partie d’un bloc PNN ou USSD valide.`
-        );
+      // Numéro valide, pas de conflit
+      const categoryId = matchedPnn.Service?.Category?.id;
+
+      let messagePrefix = "Le numéro";
+      if (categoryId === 1) {
+        messagePrefix = "Le bloc";
       }
+
+      availableNumeros.push(
+        `${messagePrefix} ${numero} est disponible. (${
+          matchedPnn.Utilisation?.nom || "Utilisation inconnue"
+        })`
+      );
     }
 
     return res.json({

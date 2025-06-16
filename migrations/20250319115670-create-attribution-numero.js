@@ -9,17 +9,17 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      type_utilisation_id: {
-        // Correction du nom de la colonne pour cohérence
-        type: Sequelize.INTEGER,
-        allowNull: true,
-        references: {
-          model: "TypeUtilisations", // Correction du nom du modèle cible
-          key: "id"
-        },
-        onDelete: "CASCADE",
-        onUpdate: "CASCADE"
-      },
+      // type_utilisation_id: {
+      //   // Correction du nom de la colonne pour cohérence
+      //   type: Sequelize.INTEGER,
+      //   allowNull: true,
+      //   references: {
+      //     model: "TypeUtilisations", // Correction du nom du modèle cible
+      //     key: "id"
+      //   },
+      //   onDelete: "CASCADE",
+      //   onUpdate: "CASCADE"
+      // },
       service_id: {
         // Correction du nom pour cohérence
         type: Sequelize.INTEGER,
@@ -50,6 +50,16 @@ module.exports = {
         },
         onDelete: "SET NULL",
         onUpdate: "CASCADE"
+      },
+      zone_utilisation_id: {
+        type: Sequelize.INTEGER,
+        allowNull: true,
+        references: {
+          model: "ZoneUtilisations",
+          key: "id"
+        },
+        onUpdate: "CASCADE",
+        onDelete: "SET NULL"
       },
       utilisation_id: {
         type: Sequelize.INTEGER,
