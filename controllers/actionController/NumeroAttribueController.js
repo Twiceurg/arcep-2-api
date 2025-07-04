@@ -66,7 +66,7 @@ exports.getAllNumerosAvecAttribution = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur:", error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur lors de la récupération des numéros"
     });
@@ -107,7 +107,7 @@ exports.countAssignedInRange = async (req, res) => {
     const { bloc_min, bloc_max } = req.query;
 
     if (!bloc_min || !bloc_max) {
-      return res.status(400).json({
+      return res .json({ success: false,
         message: "Les paramètres bloc_min et bloc_max sont requis"
       });
     }
@@ -135,7 +135,7 @@ exports.countAssignedInRange = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur lors du comptage des numéros dans la plage :", error);
-    return res.status(500).json({ message: "Erreur interne du serveur" });
+    return res.json({success: false, message: "Erreur interne du serveur" });
   }
 };
 
@@ -224,12 +224,12 @@ exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
     const { digit, prefix } = req.query;
 
     if (!digit || ![3, 4].includes(Number(digit))) {
-      return res.status(400).json({
+      return res .json({ success: false,
         message: "Le paramètre digit (3 ou 4) est requis"
       });
     }
     if (!prefix) {
-      return res.status(400).json({
+      return res.json({ success: false,
         message: "Le paramètre prefix est requis"
       });
     }
@@ -268,7 +268,7 @@ exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
       "Erreur lors du comptage des USSD par digit et prefix :",
       error
     );
-    return res.status(500).json({ message: "Erreur interne du serveur" });
+    return res .json({success: false, message: "Erreur interne du serveur" });
   }
 };
 
@@ -277,7 +277,7 @@ exports.countUssdGapByDigitAndPrefix = async (req, res) => {
   try {
     const { digit } = req.query;
     if (!digit || ![3, 4].includes(Number(digit))) {
-      return res.status(400).json({
+      return res .json({success: false,
         message: "Le paramètre digit (3 ou 4) est requis"
       });
     }
@@ -357,7 +357,7 @@ exports.countUssdGapByDigitAndPrefix = async (req, res) => {
       error
     );
     return res
-      .status(500)
+      
       .json({ success: false, message: "Erreur interne du serveur" });
   }
 };

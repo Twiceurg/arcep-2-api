@@ -26,13 +26,13 @@ class PnnController {
 
       if (!partitionLength || !selectedService || !selectedUtilisation) {
         return res 
-          .json({ message: "Tous les champs requis ne sont pas remplis" });
+          .json({success: false, message: "Tous les champs requis ne sont pas remplis" });
       }
 
       // Vérifier si le service existe
       const service = await Service.findByPk(selectedService);
       if (!service) {
-        return res.json({ message: "Service non trouvé" });
+        return res.json({success: false, message: "Service non trouvé" });
       }
 
       let prefixes = [];
@@ -83,7 +83,7 @@ class PnnController {
           const remainingLength = partitionLength - basePrefix.length;
 
           if (remainingLength < 0) {
-            return res.status(400).json({
+            return res.json({ success: false,
               message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
             });
           }
@@ -120,7 +120,7 @@ class PnnController {
             const remainingLength = partitionLength - basePrefix.length;
 
             if (remainingLength < 0) {
-              return res.json({
+              return res.json({ success: false,
                 message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
               });
             }
@@ -163,7 +163,7 @@ class PnnController {
       });
     } catch (error) {
       console.error("Erreur lors de la création du PNN:", error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res. json({success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -185,7 +185,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res. json({success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -207,7 +207,7 @@ class PnnController {
       // Vérifier si le PNN existe
       const pnn = await Pnn.findByPk(id);
       if (!pnn) {
-        return res.status(404).json({
+        return res. json({
           success: false,
           message: "PNN non trouvé"
         });
@@ -216,12 +216,12 @@ class PnnController {
       // Vérifier si le service existe
       const service = await Service.findByPk(service_id);
       if (!service) {
-        return res.status(404).json({ message: "Service non trouvé" });
+        return res .json({success: false, message: "Service non trouvé" });
       }
 
       // Vérifier si utilisationId est présent
       if (!utilisationId) {
-        return res.status(400).json({
+        return res .json({success: false,
           message: "utilisationId est requis pour la mise à jour"
         });
       }
@@ -267,7 +267,7 @@ class PnnController {
           const remainingLength = partition_length - basePrefix.length;
 
           if (remainingLength < 0) {
-            return res.status(400).json({
+            return res .json({success: false,
               message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
             });
           }
@@ -286,7 +286,7 @@ class PnnController {
             const remainingLength = partition_length - basePrefix.length;
 
             if (remainingLength < 0) {
-              return res.status(400).json({
+              return res .json({success: false,
                 message: `La longueur du préfixe ${basePrefix} dépasse la partitionLength spécifiée`
               });
             }
@@ -315,7 +315,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res. json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -347,7 +347,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res .json({success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -365,7 +365,7 @@ class PnnController {
       return res.status(200).json({ message: "PNN supprimé avec succès" });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res .json({success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -394,7 +394,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -413,7 +413,7 @@ class PnnController {
       });
 
       if (pnns.length === 0) {
-        return res.json({
+        return res.json({success: false,
           message: "Aucun PNN trouvé pour ce type d'utilisation"
         });
       }
@@ -424,7 +424,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.json({ message: "Erreur interne du serveur" });
+      return res.json({success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -442,7 +442,7 @@ class PnnController {
       });
 
       if (pnns.length === 0) {
-        return res.json({
+        return res.json({ success: false,
           message: "Aucun PNN trouvé pour ce type d'utilisation"
         });
       }
@@ -453,7 +453,7 @@ class PnnController {
       });
     } catch (error) {
       console.error(error);
-      return res.json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 

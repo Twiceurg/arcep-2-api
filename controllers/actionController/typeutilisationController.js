@@ -8,7 +8,7 @@ class TypeUtilisationController {
       const { libele_type } = req.body;
 
       if (!libele_type || libele_type.trim() === "") {
-        return res.status(400).json({
+        return res. json({
           success: false,
           message: "Le libellé est requis"
         });
@@ -19,7 +19,7 @@ class TypeUtilisationController {
       });
 
       if (existingType) {
-        return res.status(409).json({
+        return res. json({
           success: false,
           message: "Ce type d'utilisation existe déjà"
         });
@@ -53,7 +53,7 @@ class TypeUtilisationController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -71,8 +71,7 @@ class TypeUtilisationController {
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -83,8 +82,7 @@ class TypeUtilisationController {
       const { id } = req.params;
       const type = await TypeUtilisation.findByPk(id);
       if (!type) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
 
@@ -95,8 +93,7 @@ class TypeUtilisationController {
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -108,8 +105,7 @@ class TypeUtilisationController {
       const { libele_type } = req.body;
       const typeUtilisation = await TypeUtilisation.findByPk(id);
       if (!typeUtilisation) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
       typeUtilisation.libele_type = libele_type;
@@ -122,8 +118,7 @@ class TypeUtilisationController {
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -135,8 +130,7 @@ class TypeUtilisationController {
 
       const typeUtilisation = await TypeUtilisation.findByPk(id);
       if (!typeUtilisation) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
 
@@ -148,7 +142,6 @@ class TypeUtilisationController {
     } catch (error) {
       console.error(error);
       return res
-        .status(500)
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }

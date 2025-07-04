@@ -84,7 +84,7 @@ const getUnreadNotifications = async (req, res) => {
       "Erreur lors de la récupération des notifications non lues :",
       error
     );
-    res.status(500).json({ success: false, message: "Erreur serveur" });
+    res. json({ success: false, message: "Erreur serveur" });
   }
 };
 

@@ -89,7 +89,7 @@ const RenouvellementController = {
       });
 
       if (!attribution) {
-        return res.status(404).json({ message: "Attribution non trouvée" });
+        return res .json({success: false, message: "Attribution non trouvée" });
       }
 
       const categoryId =
@@ -98,7 +98,7 @@ const RenouvellementController = {
           : null;
 
       if (!decision_renouvellement) {
-        return res.status(400).json({ message: "La référence est requise" });
+        return res .json({success: false, message: "La référence est requise" });
       }
 
       const attributionDate = date_renouvellement
@@ -119,7 +119,7 @@ const RenouvellementController = {
         });
 
         if (!decisionInitiale || !decisionInitiale.duree_utilisation) {
-          return res.status(400).json({
+          return res .json({success: false,
             message:
               "Durée d'utilisation introuvable dans la décision initiale."
           });
@@ -131,8 +131,8 @@ const RenouvellementController = {
         const match = duree_utilisation.match(/^(\d+)\s*(mois|ans)$/i);
         if (!match) {
           return res
-            .status(400)
-            .json({ message: "Durée d'utilisation invalide." });
+             
+            .json({success: false, message: "Durée d'utilisation invalide." });
         }
 
         const duree = parseInt(match[1], 10);
@@ -172,7 +172,7 @@ const RenouvellementController = {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res. json({success: false, message: "Erreur interne du serveur" });
     }
   },
 
@@ -186,8 +186,7 @@ const RenouvellementController = {
       return res.status(200).json({ success: true, renouvellements });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur serveur" });
     }
   },
@@ -202,16 +201,14 @@ const RenouvellementController = {
       });
 
       if (!renouvellement) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Renouvellement non trouvé" });
       }
 
       return res.status(200).json({ success: true, renouvellement });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur serveur" });
     }
   },
@@ -228,8 +225,7 @@ const RenouvellementController = {
 
       const renouvellement = await Renouvellement.findByPk(id);
       if (!renouvellement) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Renouvellement non trouvé" });
       }
 
@@ -247,8 +243,7 @@ const RenouvellementController = {
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur serveur" });
     }
   },
@@ -260,8 +255,7 @@ const RenouvellementController = {
 
       const renouvellement = await Renouvellement.findByPk(id);
       if (!renouvellement) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Renouvellement non trouvé" });
       }
 
@@ -273,8 +267,7 @@ const RenouvellementController = {
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur serveur" });
     }
   }

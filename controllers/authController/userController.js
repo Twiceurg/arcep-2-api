@@ -16,7 +16,7 @@ const getAllUsers = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur lors de la récupération des utilisateurs."
     });
@@ -48,7 +48,8 @@ const ajouterUtilisateurLDAP = async (req, res) => {
     }
 
     // Si l'email n'est pas fourni, on le génère à partir du nom d'utilisateur ou d'autres données
-    const utilisateurEmail = email || ldapUser.email || `${username}@exemple.com`;
+    const utilisateurEmail =
+      email || ldapUser.email || `${username}@exemple.com`;
 
     // Vérifie si l'utilisateur existe déjà en base de données
     const utilisateurExist = await Utilisateur.findOne({ where: { username } });
@@ -92,7 +93,6 @@ const ajouterUtilisateurLDAP = async (req, res) => {
   }
 };
 
-
 const changeUserRole = async (req, res) => {
   const { userId } = req.params; // ID de l'utilisateur à modifier
   const { role } = req.body; // Nouveau rôle à affecter
@@ -110,7 +110,7 @@ const changeUserRole = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(userId);
 
     if (!utilisateur) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         message: "Utilisateur non trouvé."
       });
@@ -217,7 +217,7 @@ const resetPassword = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(utilisateurId);
 
     if (!utilisateur) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
+      return res.json({ success: false, message: "Utilisateur non trouvé." });
     }
 
     // Définir le mot de passe par défaut
@@ -254,7 +254,7 @@ const getUserDetails = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(utilisateurId);
 
     if (!utilisateur) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         message: "Utilisateur non trouvé."
       });
@@ -267,7 +267,7 @@ const getUserDetails = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message:
         "Erreur serveur lors de la récupération des détails de l'utilisateur."

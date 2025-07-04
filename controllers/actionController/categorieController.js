@@ -8,7 +8,7 @@ class CategoriesController {
 
       // Validation des données
       if (!nom || nom.trim() === "") {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message: "Le libellé est requis"
         });
@@ -17,7 +17,7 @@ class CategoriesController {
       // Vérifier si le Category existe déjà
       const existingCategory = await Category.findOne({ where: { nom } });
       if (existingCategory) {
-        return res.status(409).json({
+        return res.json({
           success: false,
           message: "Ce Category existe déjà"
         });
@@ -33,7 +33,7 @@ class CategoriesController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -51,7 +51,7 @@ class CategoriesController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -67,7 +67,7 @@ class CategoriesController {
       // Vérifier si le Category existe
       const existingCategory = await Category.findByPk(id);
       if (!existingCategory) {
-        return res.status(404).json({
+        return res.json({
           success: false,
           message: "Category non trouvé"
         });
@@ -76,7 +76,7 @@ class CategoriesController {
       // Vérifier si un autre Category avec le même libellé existe déjà
       const duplicateCategory = await Category.findOne({ where: { nom } });
       if (duplicateCategory && duplicateCategory.id !== parseInt(id)) {
-        return res.status(409).json({
+        return res.json({
           success: false,
           message: "Un Category avec ce libellé existe déjà"
         });
@@ -93,7 +93,7 @@ class CategoriesController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -107,7 +107,7 @@ class CategoriesController {
 
       const existingCategory = await Category.findByPk(id);
       if (!existingCategory) {
-        return res.status(404).json({
+        return res.json({
           success: false,
           message: "Category non trouvé"
         });
@@ -120,7 +120,7 @@ class CategoriesController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });

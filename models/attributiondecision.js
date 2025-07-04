@@ -15,6 +15,13 @@ module.exports = (sequelize, DataTypes) => {
       AttributionDecision.hasMany(models.Renouvellement, {
         foreignKey: "decision_id"
       });
+
+      AttributionDecision.belongsToMany(models.NumeroAttribue, {
+        through: models.DecisionNumero,
+        foreignKey: "decision_id",
+        otherKey: "numero_attribue_id",
+        as: "numeros"
+      });
     }
   }
   AttributionDecision.init(

@@ -8,7 +8,7 @@ class ServiceController {
 
       // Validation des données
       if (!nom || nom.trim() === "") {
-        return res.status(400).json({
+        return res .json({
           success: false,
           message: "Le libellé est requis"
         });
@@ -16,7 +16,7 @@ class ServiceController {
 
       // Vérification de la catégorie
       if (!category_id) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message: "L'ID de la catégorie est requis"
         });
@@ -25,7 +25,7 @@ class ServiceController {
       // Vérifier si la catégorie existe
       const categoryExists = await Category.findByPk(category_id);
       if (!categoryExists) {
-        return res.status(404).json({
+        return res .json({
           success: false,
           message: "La catégorie spécifiée n'existe pas"
         });
@@ -34,7 +34,7 @@ class ServiceController {
       // Vérifier si le service existe déjà
       const existingService = await Service.findOne({ where: { nom } });
       if (existingService) {
-        return res.status(409).json({
+        return res.json({
           success: false,
           message: "Ce service existe déjà"
         });
@@ -53,7 +53,7 @@ class ServiceController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res .json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -78,7 +78,7 @@ class ServiceController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res .json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -93,7 +93,7 @@ class ServiceController {
       // Vérifier si la catégorie existe
       const categoryExists = await Category.findByPk(category_id);
       if (!categoryExists) {
-        return res.status(404).json({
+        return res .json({
           success: false,
           message: "La catégorie spécifiée n'existe pas"
         });
@@ -112,7 +112,7 @@ class ServiceController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res .json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -128,7 +128,7 @@ class ServiceController {
       // Vérifier si le service existe
       const service = await Service.findByPk(id);
       if (!service) {
-        return res.status(404).json({
+        return res. json({
           success: false,
           message: "Service non trouvé"
         });
@@ -137,7 +137,7 @@ class ServiceController {
       // Vérifier si un autre service avec le même libellé existe déjà
       const existingService = await Service.findOne({ where: { nom } });
       if (existingService && existingService.id !== parseInt(id)) {
-        return res.status(409).json({
+        return res .json({
           success: false,
           message: "Un service avec ce libellé existe déjà"
         });
@@ -148,7 +148,7 @@ class ServiceController {
         // Vérifier si la catégorie existe
         const categoryExists = await Category.findByPk(category_id);
         if (!categoryExists) {
-          return res.status(404).json({
+          return res .json({
             success: false,
             message: "La catégorie spécifiée n'existe pas"
           });
@@ -171,7 +171,7 @@ class ServiceController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res. json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -185,7 +185,7 @@ class ServiceController {
 
       const service = await Service.findByPk(id);
       if (!service) {
-        return res.status(404).json({
+        return res. json({
           success: false,
           message: "Service non trouvé"
         });
@@ -198,7 +198,7 @@ class ServiceController {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res. json({
         success: false,
         message: "Erreur interne du serveur"
       });

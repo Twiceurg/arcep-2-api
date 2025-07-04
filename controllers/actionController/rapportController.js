@@ -23,8 +23,7 @@ class RapportController {
       // Vérifier si l'attribution existe
       const attribution = await AttributionNumero.findByPk(attribution_id);
       if (!attribution) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Attribution introuvable" });
       }
 
@@ -34,7 +33,7 @@ class RapportController {
       });
 
       if (existingRapport) {
-        return res.status(400).json({
+        return res. json({
           success: false,
           message: "Cette attribution a déjà un rapport"
         });
@@ -63,8 +62,7 @@ class RapportController {
         .json({ success: true, message: "Rapport créé avec succès", rapport });
     } catch (error) {
       console.error("Erreur lors de la création du rapport :", error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -78,16 +76,14 @@ class RapportController {
       });
 
       if (!rapport) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Rapport introuvable" });
       }
 
       return res.status(200).json({ success: true, rapport });
     } catch (error) {
       console.error("Erreur lors de la récupération du rapport :", error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -102,8 +98,7 @@ class RapportController {
       return res.status(200).json({ success: true, rapports });
     } catch (error) {
       console.error("Erreur lors de la récupération des rapports :", error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du  ok serveur" });
     }
   }
@@ -116,8 +111,7 @@ class RapportController {
       // Vérifier si l'attribution existe
       const attribution = await AttributionNumero.findByPk(attribution_id);
       if (!attribution) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Attribution introuvable" });
       }
 
@@ -128,8 +122,7 @@ class RapportController {
       return res.status(200).json({ success: true, rapports });
     } catch (error) {
       console.error("Erreur lors de la récupération des rapports :", error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -142,8 +135,7 @@ class RapportController {
 
       const rapport = await Rapport.findByPk(id);
       if (!rapport) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Rapport introuvable" });
       }
 
@@ -156,8 +148,7 @@ class RapportController {
       });
     } catch (error) {
       console.error("Erreur lors de la mise à jour du rapport :", error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -169,8 +160,7 @@ class RapportController {
 
       const rapport = await Rapport.findByPk(id);
       if (!rapport) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Rapport introuvable" });
       }
 
@@ -181,8 +171,7 @@ class RapportController {
         .json({ success: true, message: "Rapport supprimé avec succès" });
     } catch (error) {
       console.error("Erreur lors de la suppression du rapport :", error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }

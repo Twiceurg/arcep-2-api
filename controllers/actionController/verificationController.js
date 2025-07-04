@@ -28,6 +28,11 @@ async function checkNumeroDisponibilite(req, res) {
   }
 
   try {
+    const allUtilisations = await Utilisation.findAll();
+    const utilisationsMap = {};
+    allUtilisations.forEach((u) => {
+      utilisationsMap[u.id] = u.nom;
+    });
     // Récupérer les conflits d'attribution PNN
     const numeroConflicts = await NumeroAttribue.findAll({
       where: {
@@ -78,11 +83,15 @@ async function checkNumeroDisponibilite(req, res) {
     for (const entry of numeroConflicts) {
       const clientName =
         entry.AttributionNumero?.Client?.denomination || "client inconnu";
-      const utilisationName =
-        entry.Pnn?.Utilisation?.nom || "Utilisation inconnue";
+
+      let utilisationName = "Utilisation inconnue";
+      if (entry.utilisation_id && utilisationsMap[entry.utilisation_id]) {
+        utilisationName = utilisationsMap[entry.utilisation_id];
+      } else if (entry.Pnn?.Utilisation?.nom) {
+        utilisationName = entry.Pnn.Utilisation.nom;
+      }
 
       const categoryId = entry.AttributionNumero?.Service?.Category?.id;
-
       let messagePrefix = "Le numéro";
       if (categoryId === 1) {
         messagePrefix = "Le bloc";
@@ -109,11 +118,24 @@ async function checkNumeroDisponibilite(req, res) {
         (pnn) => numeroInt >= pnn.bloc_min && numeroInt <= pnn.block_max
       );
 
+      // if (!matchedPnn) {
+      //   outOfRangeNumeros.push(
+      //     `Le numéro ${numero} ne fait pas partie d’un bloc PNN valide.`
+      //   );
+      //   continue; // Important d'arrêter ici pour ce numéro
+      // }
+
       if (!matchedPnn) {
-        outOfRangeNumeros.push(
-          `Le numéro ${numero} ne fait pas partie d’un bloc PNN valide.`
-        );
-        continue; // Important d'arrêter ici pour ce numéro
+        if (numeroStr.length >= 3 && numeroStr.length <= 4) {
+          availableNumeros.push(
+            `Le numéro ${numero} est disponible (USSD détecté)`
+          );
+        } else {
+          outOfRangeNumeros.push(
+            `Le numéro ${numero} ne fait pas partie d’un bloc PNN  ou numero USSD valide.`
+          );
+        }
+        continue;
       }
 
       const isConflict = numeroConflicts.some(
@@ -134,10 +156,12 @@ async function checkNumeroDisponibilite(req, res) {
         messagePrefix = "Le bloc";
       }
 
+      const utilisationNom =
+        matchedPnn.Utilisation?.nom ||
+        (utilisationsMap[matchedPnn.utilisation_id] ?? "Utilisation inconnue");
+
       availableNumeros.push(
-        `${messagePrefix} ${numero} est disponible. (${
-          matchedPnn.Utilisation?.nom || "Utilisation inconnue"
-        })`
+        `${messagePrefix} ${numero} est disponible. (${utilisationNom})`
       );
     }
 

@@ -5,6 +5,7 @@ const {
   NumeroAttribue,
   AttributionDecision,
   Service,
+  DecisionNumero,
   Category,
   Client,
   TypeUtilisation,
@@ -25,7 +26,7 @@ const historiqueAttributionController = {
       // Vérifier si l'attribution existe
       const attribution = await AttributionNumero.findByPk(attribution_id);
       if (!attribution) {
-        return res.status(404).json({ message: "Attribution non trouvée" });
+        return res.json({ success: false, message: "Attribution non trouvée" });
       }
 
       // Récupérer les historiques liés à cette attribution
@@ -39,10 +40,10 @@ const historiqueAttributionController = {
               { model: Client },
               { model: Utilisation },
 
-               {
-            model: TypeUtilisation,
-            through: { attributes: [] } 
-          },
+              {
+                model: TypeUtilisation,
+                through: { attributes: [] }
+              },
               {
                 model: Pnn,
                 include: [{ model: Utilisation }]
@@ -58,7 +59,7 @@ const historiqueAttributionController = {
       return res.status(200).json(historique);
     } catch (error) {
       console.error("Erreur lors de la récupération de l'historique :", error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   },
 
@@ -82,7 +83,7 @@ const historiqueAttributionController = {
       // Vérification et conversion de attributionId
       const attributionIdInt = parseInt(attributionId, 10);
       if (isNaN(attributionIdInt)) {
-        return res.status(400).json({ message: "attributionId invalide." });
+        return res.json({ success: false, message: "attributionId invalide." });
       }
 
       // Gestion des fichiers uploadés
@@ -95,7 +96,8 @@ const historiqueAttributionController = {
 
       // Vérification des données obligatoires
       if (!attributionId || !motif || !dateDebut || !dureeSuspension) {
-        return res.status(400).json({
+        return res.json({
+          success: false,
           message:
             "Données manquantes : attributionId, motif, dateDebut, ou dureeSuspension."
         });
@@ -104,13 +106,14 @@ const historiqueAttributionController = {
       // Vérification de la validité de la date de début
       const dateDebutObj = new Date(dateDebut);
       if (isNaN(dateDebutObj.getTime())) {
-        return res.status(400).json({ message: "Date de début invalide." });
+        return res.json({ success: false, message: "Date de début invalide." });
       }
 
       // Vérification et extraction de la durée de suspension (mois ou années)
       const match = dureeSuspension.match(/^(\d+)\s*(mois|ans)$/i);
       if (!match) {
-        return res.status(400).json({
+        return res.json({
+          success: false,
           message:
             "Durée invalide. Veuillez spécifier la durée (ex: 3 mois ou 2 ans)."
         });
@@ -154,7 +157,10 @@ const historiqueAttributionController = {
       return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error("Erreur lors de l'application de la suspension :", error);
-      return res.status(500).json({ message: "Erreur interne du serveur." });
+      return res.json({
+        success: false,
+        message: "Erreur interne du serveur."
+      });
     }
   },
 
@@ -180,16 +186,17 @@ const historiqueAttributionController = {
         : null;
 
       // Vérification des champs obligatoires
-      if (!attributionId || !motif || !dateDebut) {
-        return res.status(400).json({
-          message: "Données manquantes : attributionId, motif ou dateDebut."
+      if (!attributionId || !dateDebut) {
+        return res.json({
+          success: false,
+          message: "Données manquantes"
         });
       }
 
       // Vérification de la validité de la date de début
       const dateDebutObj = new Date(dateDebut);
       if (isNaN(dateDebutObj.getTime())) {
-        return res.status(400).json({ message: "Date de début invalide." });
+        return res.json({ success: false, message: "Date de début invalide." });
       }
 
       // Création de l'entrée d'historique sans durée ni date de fin
@@ -218,7 +225,10 @@ const historiqueAttributionController = {
       return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error("Erreur lors de l'application du retrait :", error);
-      return res.status(500).json({ message: "Erreur interne du serveur." });
+      return res.json({
+        success: false,
+        message: "Erreur interne du serveur."
+      });
     }
   },
 
@@ -247,7 +257,8 @@ const historiqueAttributionController = {
 
       // Vérification des champs obligatoires
       if (!attributionId || !motif || !dateDebut) {
-        return res.status(400).json({
+        return res.json({
+          success: false,
           message: "Données manquantes : attributionId, motif ou dateDebut."
         });
       }
@@ -255,7 +266,7 @@ const historiqueAttributionController = {
       // Validation date
       const dateDebutObj = new Date(dateDebut);
       if (isNaN(dateDebutObj.getTime())) {
-        return res.status(400).json({ message: "Date de début invalide." });
+        return res.json({ success: false, message: "Date de début invalide." });
       }
 
       // Création de l'entrée dans l'historique
@@ -284,7 +295,10 @@ const historiqueAttributionController = {
       return await historiqueAttributionController.assignReference(req, res);
     } catch (error) {
       console.error("Erreur lors de l'application de Résiliation :", error);
-      return res.status(500).json({ message: "Erreur interne du serveur." });
+      return res.json({
+        success: false,
+        message: "Erreur interne du serveur."
+      });
     }
   },
 
@@ -311,7 +325,7 @@ const historiqueAttributionController = {
       });
 
       if (!historique) {
-        return res.status(404).json({ message: "Historique non trouvé" });
+        return res.json({ success: false, message: "Historique non trouvé" });
       }
 
       // On s'assure que numerosAffectes est bien un tableau
@@ -394,6 +408,22 @@ const historiqueAttributionController = {
           type_decision: decisionType
         });
 
+        for (const numero of numerosAffectes) {
+          const numeroEnBase = await NumeroAttribue.findOne({
+            where: {
+              attribution_id: attribution.id,
+              numero_attribue: numero
+            }
+          });
+
+          if (numeroEnBase) {
+            await DecisionNumero.create({
+              numero_attribue_id: numeroEnBase.id,
+              decision_id: attributionDecision.id
+            });
+          }
+        }
+
         return res.status(200).json({
           success: true,
           message: `${
@@ -426,7 +456,7 @@ const historiqueAttributionController = {
 
           return await updateHistoriqueAndCreateDecision(
             historique.type_modification,
-            "actif",
+            "attribue",
             {
               date_expiration: lastAttributionDecision.date_expiration,
               duree_utilisation: lastAttributionDecision.duree_utilisation,
@@ -490,7 +520,10 @@ const historiqueAttributionController = {
       });
 
       if (!numeroAttribue || numeroAttribue.length === 0) {
-        return res.status(404).json({ message: "Numéro attribué non trouvé" });
+        return res.json({
+          success: false,
+          message: "Numéro attribué non trouvé"
+        });
       }
 
       historique.reference_modification = reference_decision;
@@ -514,6 +547,13 @@ const historiqueAttributionController = {
         type_decision: "suspension"
       });
 
+      for (const numero of numeroAttribue) {
+        await DecisionNumero.create({
+          numero_attribue_id: numero.id,
+          decision_id: attributionDecision.id
+        });
+      }
+
       return res.status(200).json({
         success: true,
         message: "Référence assignée et historique mis à jour avec succès",
@@ -521,7 +561,7 @@ const historiqueAttributionController = {
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 

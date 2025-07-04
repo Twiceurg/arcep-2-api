@@ -310,7 +310,10 @@ router.get(
 );
 router.put(
   "/attribution/:id",
-  upload.single("file"),
+  upload.fields([
+    { name: "fichier", maxCount: 1 },
+    { name: "decision_file_url", maxCount: 1 }
+  ]),
   authenticateToken,
   authorizeRole("superadmin", "admin"),
   AttributionNumeroController.updateAttribution

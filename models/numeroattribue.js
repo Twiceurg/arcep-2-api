@@ -22,8 +22,13 @@ module.exports = (sequelize, DataTypes) => {
       NumeroAttribue.belongsTo(models.ZoneUtilisation, {
         foreignKey: "zone_utilisation_id"
       });
-      
 
+      NumeroAttribue.belongsToMany(models.AttributionDecision, {
+        through: models.DecisionNumero,
+        foreignKey: "numero_attribue_id",
+        otherKey: "decision_id",
+        as: "decisions"
+      });
 
       //  NumeroAttribue.belongsToMany(models.AttributionDecision, {
       //   through: models.DecisionNumero,

@@ -2,10 +2,13 @@ const cron = require("node-cron");
 const {
   AttributionDecision,
   NumeroAttribue,
-  AttributionNumero,UssdDecision, USSDAttribution, UssdAttribuer
+  AttributionNumero,
+  UssdDecision,
+  USSDAttribution,
+  UssdAttribuer
 } = require("../models");
 const Sequelize = require("sequelize");
-const { Op } = require('sequelize');
+const { Op } = require("sequelize");
 
 // Fonction pour vérifier les expirations et désactiver les décisions
 const verifierExpirationEtDesactiver = async () => {
@@ -31,16 +34,16 @@ const verifierExpirationEtDesactiver = async () => {
     });
 
     for (let decision of decisions) {
-      console.log("Type de décision :", decision.type_decision); 
+      console.log("Type de décision :", decision.type_decision);
       if (decision.type_decision === "suspension") {
         const attribution = decision.AttributionNumero;
- 
-        if (attribution && attribution.NumeroAttribues) { 
+
+        if (attribution && attribution.NumeroAttribues) {
           for (let numero of attribution.NumeroAttribues) {
             console.log("Vérification du numéro :", numero.numero_attribue);
- 
+
             if (numero.statut === "suspendu") {
-              numero.statut = "attribue";  
+              numero.statut = "attribue";
               await numero.save();
               console.log(
                 `Numéro ${numero.numero_attribue} remis à attribue en raison de l'expiration de la suspension.`
@@ -57,7 +60,7 @@ const verifierExpirationEtDesactiver = async () => {
           );
         }
       }
- 
+
       decision.etat_autorisation = false;
       await decision.save();
       console.log(
@@ -114,7 +117,9 @@ const verifierUSSDExpirationEtDesactiver = async () => {
             }
           }
         } else {
-          console.log(`Aucun numéro associé à l'attribution pour la décision ${decision.id}.`);
+          console.log(
+            `Aucun numéro associé à l'attribution pour la décision ${decision.id}.`
+          );
         }
       }
 
@@ -124,7 +129,10 @@ const verifierUSSDExpirationEtDesactiver = async () => {
       console.log(`Décision ${decision.id} désactivée suite à expiration.`);
     }
   } catch (error) {
-    console.error("Erreur lors de la vérification des expirations USSD :", error);
+    console.error(
+      "Erreur lors de la vérification des expirations USSD :",
+      error
+    );
   }
 };
 

@@ -27,9 +27,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
     // Vérification de l'existence de l'utilisation
     const utilisation = await Utilisation.findByPk(utilisationId);
     if (!utilisation) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Utilisation non trouvée" });
+      return res.json({ success: false, message: "Utilisation non trouvée" });
     }
 
     // Récupération des blocs PNN liés à cette utilisation
@@ -46,16 +44,12 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       start = new Date(startDate);
       end = new Date(endDate);
       if (isNaN(start) || isNaN(end)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Format de date invalide" });
+        return res.json({ success: false, message: "Format de date invalide" });
       }
     } else if (annee && !mois) {
       const y = parseInt(annee);
       if (isNaN(y)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Année invalide" });
+        return res.json({ success: false, message: "Année invalide" });
       }
       start = new Date(y, 0, 1);
       end = new Date(y, 11, 31, 23, 59, 59);
@@ -63,9 +57,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       const m = parseInt(mois) - 1;
       const y = parseInt(annee);
       if (isNaN(m) || isNaN(y)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Mois ou année invalide" });
+        return res.json({ success: false, message: "Mois ou année invalide" });
       }
       start = new Date(y, m, 1);
       end = new Date(y, m + 1, 0, 23, 59, 59);
@@ -73,9 +65,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       const m = parseInt(mois) - 1;
       const y = new Date().getFullYear();
       if (isNaN(m)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Mois invalide" });
+        return res.json({ success: false, message: "Mois invalide" });
       }
       start = new Date(y, m, 1);
       end = new Date(y, m + 1, 0, 23, 59, 59);
@@ -168,7 +158,7 @@ const getTotalAndRemainingNumbers = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur :", error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur"
     });
@@ -186,16 +176,12 @@ const TableauRecap = async (req, res) => {
       start = new Date(startDate);
       end = new Date(endDate);
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Format de date invalide" });
+        return res.json({ success: false, message: "Format de date invalide" });
       }
     } else if (annee && !mois) {
       const y = parseInt(annee);
       if (isNaN(y)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Année invalide" });
+        return res.json({ success: false, message: "Année invalide" });
       }
       start = new Date(y, 0, 1);
       end = new Date(y, 11, 31, 23, 59, 59);
@@ -203,9 +189,7 @@ const TableauRecap = async (req, res) => {
       const m = parseInt(mois) - 1;
       const y = parseInt(annee);
       if (isNaN(y) || isNaN(m) || m < 0 || m > 11) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Mois ou année invalide" });
+        return res.json({ success: false, message: "Mois ou année invalide" });
       }
       start = new Date(y, m, 1);
       end = new Date(y, m + 1, 0, 23, 59, 59);
@@ -213,9 +197,7 @@ const TableauRecap = async (req, res) => {
       const m = parseInt(mois) - 1;
       const y = new Date().getFullYear();
       if (isNaN(m) || m < 0 || m > 11) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Mois invalide" });
+        return res.json({ success: false, message: "Mois invalide" });
       }
       start = new Date(y, m, 1);
       end = new Date(y, m + 1, 0, 23, 59, 59);
@@ -310,7 +292,9 @@ const TableauRecap = async (req, res) => {
       const blocMin = pnn.bloc_min || 0;
       const blocMax = pnn.block_max || 0;
       const totalInBloc = blocMax >= blocMin ? blocMax - blocMin + 1 : 0;
-      const allocated = pnn.NumeroAttribues?.length || 0;
+      const allocated =
+        pnn.NumeroAttribues?.filter((num) => num.statut !== "libre").length ||
+        0;
 
       totalNumbers += totalInBloc;
       allocatedNumbers += allocated;
@@ -371,10 +355,9 @@ const TableauRecap = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur TableauRecap :", error);
-    return res.status(500).json({ success: false, message: "Erreur serveur" });
+    return res.json({ success: false, message: "Erreur serveur" });
   }
 };
-
 
 // Fonction pour récupérer les décisions associées aux attributions
 const getAttributionDecisions = async (where = {}) => {
@@ -548,6 +531,7 @@ const getDecisionPertinente = (decisions) => {
   // 6. Attribution (par défaut)
   return sorted.find((d) => d.type_decision === "attribution") || sorted[0];
 };
+
 // Exemple d'une fonction pour récupérer les numéros
 const getNumbers = async (attributionWhere = {}) => {
   try {
@@ -555,24 +539,23 @@ const getNumbers = async (attributionWhere = {}) => {
       console.log("Aucun critère spécifié. Filtrage par défaut appliqué.");
     }
 
-    // Récupération des numéros attribués via NumeroAttribue
+    const whereClause = {
+      ...attributionWhere,
+      statut: { [Op.ne]: "libre" } // Exclure les statuts "libre"
+    };
+
     const numerosAttribuesPNN = await NumeroAttribue.findAll({
-      where: attributionWhere,
+      where: whereClause,
       attributes: ["id", "pnn_id", "statut", "utilisation_id"]
     });
 
-    const allNumbers = numerosAttribuesPNN;
-
-    if (allNumbers.length === 0) {
+    if (!numerosAttribuesPNN || numerosAttribuesPNN.length === 0) {
       console.warn("Aucun numéro trouvé pour les critères spécifiés.");
     }
 
-    return allNumbers;
+    return numerosAttribuesPNN;
   } catch (error) {
-    console.error(
-      "Erreur lors de la récupération des numéros :",
-      error.message
-    );
+    console.error("Erreur lors de la récupération des numéros :", error);
     throw new Error(
       `Erreur lors de la récupération des numéros avec les critères ${JSON.stringify(
         attributionWhere
@@ -816,9 +799,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
 
     if (mois && annee) {
       if (isNaN(m) || isNaN(y)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Mois ou année invalide" });
+        return res.json({ success: false, message: "Mois ou année invalide" });
       }
 
       startOfCurrentMonth = new Date(y, m, 1);
@@ -827,9 +808,7 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
       endOfPreviousMonth = new Date(y, m, 1); // exclusif
     } else if (mois && !annee) {
       if (isNaN(m)) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Mois invalide" });
+        return res.json({ success: false, message: "Mois invalide" });
       }
 
       const year = now.getFullYear();
