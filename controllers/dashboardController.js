@@ -302,7 +302,11 @@ const TableauRecap = async (req, res) => {
       const utilisationId = pnn.Utilisation?.id || 0;
       const utilisationName = pnn.Utilisation?.nom || "Inconnu";
 
-      const key = `${utilisationId}||${utilisationName}`;
+      // ✅ Astuce pour forcer séparation pour utilisation_id = 12
+      const key =
+        utilisationId === 12
+          ? `${utilisationId}||${utilisationName}||pnn_${pnn.id}`
+          : `${utilisationId}||${utilisationName}`;
 
       if (!utilisationMap[key]) {
         utilisationMap[key] = [];
@@ -895,8 +899,142 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
   }
 };
 
+const getHistoriqueAttributionsParUtilisation = async (req, res) => {
+  try {
+    const utilisationsCibles = [12, 14];
+
+    const pnns = await Pnn.findAll({
+      where: {
+        utilisation_id: { [Op.in]: utilisationsCibles }
+      },
+      include: [
+        {
+          model: Utilisation,
+          attributes: ["id", "nom"]
+        },
+        {
+          model: NumeroAttribue,
+          required: true,
+          attributes: ["date_attribution", "statut"],  
+          where: {
+            statut: {
+              [Op.ne]: "libre"
+            }
+          },
+          include: [
+            {
+              model: AttributionNumero,
+              attributes: ["client_id"],
+              include: [
+                {
+                  model: Client,
+                  attributes: ["id", "denomination"]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    const resultats = {};
+
+    pnns.forEach((pnn) => {
+      const utilisationId = pnn.utilisation_id;
+      const utilisationNom = pnn.Utilisation?.nom || "Inconnu";
+      const prefix = String(pnn.partition_prefix); // on regroupe par prefix
+
+      if (!resultats[utilisationId]) {
+        resultats[utilisationId] = {
+          utilisation_id: utilisationId,
+          utilisation: utilisationNom,
+          regroupement: {}
+        };
+      }
+
+      if (!resultats[utilisationId].regroupement[prefix]) {
+        resultats[utilisationId].regroupement[prefix] = {
+          prefix,
+          total_theorique: 0,
+          total_attributions: 0,
+          historique: {}
+        };
+      }
+
+      const blocSize = pnn.block_max - pnn.bloc_min + 1;
+
+      // Pour les IDs concernés, on calcule la taille réelle
+      const cibleLongueur = 8;
+      const digitsManquants = cibleLongueur - (pnn.partition_length || 0);
+      const facteur = Math.pow(10, digitsManquants);
+
+      let totalReel;
+
+      if (utilisationId === 14 && prefix === "2") {
+        totalReel = 10_000_000; // cas fixe regroupé
+      } else {
+        totalReel = blocSize * facteur; // cas général (mobile et fixe)
+      }
+
+      resultats[utilisationId].regroupement[prefix].total_theorique +=
+        totalReel;
+
+      pnn.NumeroAttribues.forEach((attribue) => {
+        const date = new Date(attribue.date_attribution);
+        const annee = date.getFullYear();
+        const clientNom =
+          attribue.AttributionNumero?.Client?.denomination || "Inconnu";
+
+        if (!resultats[utilisationId].regroupement[prefix].historique[annee]) {
+          resultats[utilisationId].regroupement[prefix].historique[annee] = {
+            total_attributions: 0,
+            par_operateur: {}
+          };
+        }
+
+        resultats[utilisationId].regroupement[prefix].historique[
+          annee
+        ].total_attributions += 1;
+        resultats[utilisationId].regroupement[prefix].total_attributions += 1;
+
+        if (
+          !resultats[utilisationId].regroupement[prefix].historique[annee]
+            .par_operateur[clientNom]
+        ) {
+          resultats[utilisationId].regroupement[prefix].historique[
+            annee
+          ].par_operateur[clientNom] = 0;
+        }
+
+        resultats[utilisationId].regroupement[prefix].historique[
+          annee
+        ].par_operateur[clientNom] += 1;
+      });
+    });
+
+    // Format final pour l'API
+    const data = Object.values(resultats).map((item) => ({
+      utilisation_id: item.utilisation_id,
+      utilisation: item.utilisation,
+      regroupements: Object.values(item.regroupement)
+    }));
+
+    return res.json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error("Erreur getHistoriqueAttributionsParUtilisation:", error);
+    return res.json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+};
+
 module.exports = {
   getTotalAndRemainingNumbers,
   getAllTotalAndRemainingNumbers,
-  TableauRecap
+  TableauRecap,
+  getHistoriqueAttributionsParUtilisation
 };

@@ -887,5 +887,6 @@ router.delete(
 );
 
 router.get("/dashboard/TableauGlobal", dashboardController.TableauRecap);
+router.get("/dashboard/TableauGlobalParUtilisation", dashboardController.getHistoriqueAttributionsParUtilisation);
 
 module.exports = router;
