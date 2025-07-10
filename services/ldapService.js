@@ -18,22 +18,37 @@ const ad = new ActiveDirectory(config);
 const authenticateAndFetchLDAPUser = async (username, password) => {
   return new Promise((resolve, reject) => {
     const userPrincipalName = `${username}@interne.arcep.tg`;
-    console.log("Tentative de connexion LDAP avec :");
-    console.log("URL:", config.url);
-    console.log("Username:", config.username);
-    console.log("BaseDN:", config.baseDN);
 
     ad.authenticate(userPrincipalName, password, (err, auth) => {
       if (err) {
-        console.error("Erreur lors de l'authentification LDAP:", err.message);
+        console.error("Erreur LDAP:", err);
+
+        // Cas typique de problème de réseau ou mauvais hôte LDAP
+        if (
+          err.message?.includes("ENOTFOUND") ||
+          err.message?.includes("ECONNREFUSED") ||
+          err.message?.includes("connect") ||
+          err.message?.includes("Cannot contact")
+        ) {
+          return reject({
+            success: false,
+            message:
+              "Connexion à l'annuaire impossible. Veuillez vérifier votre connexion réseau ou les paramètres LDAP."
+          });
+        }
+
+        // Cas probable : identifiants invalides
         return reject({
           success: false,
-          message: "Échec de l'authentification : connexion à l'annuaire impossible. Veuillez vous assurer que vous êtes connecté au bon réseau"
+          message: "Nom d'utilisateur ou mot de passe incorrect."
         });
       }
 
       if (!auth) {
-        return reject({ success: false, message: "Identifiants invalides" });
+        return reject({
+          success: false,
+          message: "Nom d'utilisateur ou mot de passe incorrect."
+        });
       }
 
       // Recherche les infos de l'utilisateur après authentification
@@ -45,7 +60,7 @@ const authenticateAndFetchLDAPUser = async (username, password) => {
           );
           return reject({
             success: false,
-            message: "Utilisateur non trouvé"
+            message: "Utilisateur trouvé mais aucune donnée récupérée."
           });
         }
 

@@ -1,4 +1,4 @@
-const { Op } = require("sequelize");
+const { Op, fn, col, literal } = require("sequelize");
 const {
   AttributionNumero,
   Pnn,
@@ -915,7 +915,7 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
         {
           model: NumeroAttribue,
           required: true,
-          attributes: ["date_attribution", "statut"],  
+          attributes: ["date_attribution", "statut"],
           where: {
             statut: {
               [Op.ne]: "libre"
@@ -942,7 +942,7 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
     pnns.forEach((pnn) => {
       const utilisationId = pnn.utilisation_id;
       const utilisationNom = pnn.Utilisation?.nom || "Inconnu";
-      const prefix = String(pnn.partition_prefix); // on regroupe par prefix
+      const prefix = String(pnn.partition_prefix);
 
       if (!resultats[utilisationId]) {
         resultats[utilisationId] = {
@@ -962,8 +962,6 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
       }
 
       const blocSize = pnn.block_max - pnn.bloc_min + 1;
-
-      // Pour les IDs concernés, on calcule la taille réelle
       const cibleLongueur = 8;
       const digitsManquants = cibleLongueur - (pnn.partition_length || 0);
       const facteur = Math.pow(10, digitsManquants);
@@ -971,9 +969,9 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
       let totalReel;
 
       if (utilisationId === 14 && prefix === "2") {
-        totalReel = 10_000_000; // cas fixe regroupé
+        totalReel = 10_000_000;
       } else {
-        totalReel = blocSize * facteur; // cas général (mobile et fixe)
+        totalReel = blocSize * facteur;
       }
 
       resultats[utilisationId].regroupement[prefix].total_theorique +=
@@ -982,8 +980,10 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
       pnn.NumeroAttribues.forEach((attribue) => {
         const date = new Date(attribue.date_attribution);
         const annee = date.getFullYear();
-        const clientNom =
-          attribue.AttributionNumero?.Client?.denomination || "Inconnu";
+        const clientId = attribue.AttributionNumero?.Client?.id;
+        const clientNom = (
+          attribue.AttributionNumero?.Client?.denomination || "Inconnu"
+        ).toUpperCase();
 
         if (!resultats[utilisationId].regroupement[prefix].historique[annee]) {
           resultats[utilisationId].regroupement[prefix].historique[annee] = {
@@ -992,27 +992,30 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
           };
         }
 
+        // Total général (inclus même id 42)
         resultats[utilisationId].regroupement[prefix].historique[
           annee
         ].total_attributions += 1;
         resultats[utilisationId].regroupement[prefix].total_attributions += 1;
 
-        if (
-          !resultats[utilisationId].regroupement[prefix].historique[annee]
-            .par_operateur[clientNom]
-        ) {
+        // Exclusion opérateur id 42 pour par_operateur
+        if (clientId !== 42) {
+          if (
+            !resultats[utilisationId].regroupement[prefix].historique[annee]
+              .par_operateur[clientNom]
+          ) {
+            resultats[utilisationId].regroupement[prefix].historique[
+              annee
+            ].par_operateur[clientNom] = 0;
+          }
           resultats[utilisationId].regroupement[prefix].historique[
             annee
-          ].par_operateur[clientNom] = 0;
+          ].par_operateur[clientNom] += 1;
         }
-
-        resultats[utilisationId].regroupement[prefix].historique[
-          annee
-        ].par_operateur[clientNom] += 1;
       });
     });
 
-    // Format final pour l'API
+    // Format final
     const data = Object.values(resultats).map((item) => ({
       utilisation_id: item.utilisation_id,
       utilisation: item.utilisation,
@@ -1032,9 +1035,100 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
   }
 };
 
+const getHistoriqueSVA = async (req, res) => {
+  try {
+    const utilisationsCibles = [10, 11];
+
+    // On fait un findAll avec groupements et comptage sur NumeroAttribue
+    const resultatsBruts = await NumeroAttribue.findAll({
+      attributes: [
+        [fn("YEAR", col("date_attribution")), "annee"],
+        [col("Pnn.utilisation_id"), "utilisation_id"],
+        [col("Pnn.partition_prefix"), "prefix"],
+        [fn("COUNT", col("NumeroAttribue.id")), "total_attributions"]
+      ],
+      where: {
+        statut: { [Op.ne]: "libre" }
+      },
+      include: [
+        {
+          model: Pnn,
+          attributes: [],
+          where: {
+            utilisation_id: { [Op.in]: utilisationsCibles }
+          },
+          include: [
+            {
+              model: Utilisation,
+              attributes: ["nom"]
+            }
+          ]
+        }
+      ],
+      group: ["utilisation_id", "prefix", "annee", "Pnn.Utilisation.nom"],
+      order: [
+        [col("utilisation_id"), "ASC"],
+        [col("prefix"), "ASC"],
+        [literal("annee"), "ASC"]
+      ],
+      raw: true,
+      nest: true
+    });
+
+    // Regroupement des résultats par utilisation et prefix
+    const resultats = {};
+
+    for (const row of resultatsBruts) {
+      const utilisationId = row.utilisation_id;
+      const utilisationNom = row.Pnn.Utilisation.nom || "Inconnu";
+      const prefix = String(row.prefix);
+      const annee = row.annee;
+      const total = parseInt(row.total_attributions, 10);
+
+      if (!resultats[utilisationId]) {
+        resultats[utilisationId] = {
+          utilisation_id: utilisationId,
+          utilisation: utilisationNom,
+          regroupement: {}
+        };
+      }
+      if (!resultats[utilisationId].regroupement[prefix]) {
+        resultats[utilisationId].regroupement[prefix] = {
+          prefix,
+          total_attributions: 0,
+          historique: {}
+        };
+      }
+
+      resultats[utilisationId].regroupement[prefix].historique[annee] = {
+        total_attributions: total
+      };
+      resultats[utilisationId].regroupement[prefix].total_attributions += total;
+    }
+
+    const data = Object.values(resultats).map((item) => ({
+      utilisation_id: item.utilisation_id,
+      utilisation: item.utilisation,
+      regroupements: Object.values(item.regroupement)
+    }));
+
+    return res.json({
+      success: true,
+      data
+    });
+  } catch (error) {
+    console.error("Erreur getHistoriqueSVA:", error);
+    return res.json({
+      success: false,
+      message: "Erreur serveur"
+    });
+  }
+};
+
 module.exports = {
   getTotalAndRemainingNumbers,
   getAllTotalAndRemainingNumbers,
   TableauRecap,
-  getHistoriqueAttributionsParUtilisation
+  getHistoriqueAttributionsParUtilisation,
+  getHistoriqueSVA
 };

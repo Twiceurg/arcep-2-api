@@ -81,8 +81,9 @@ async function checkNumeroDisponibilite(req, res) {
 
     // Conflits
     for (const entry of numeroConflicts) {
-      const clientName =
-        entry.AttributionNumero?.Client?.denomination || "client inconnu";
+      const clientName = (
+        entry.AttributionNumero?.Client?.denomination || "client inconnu"
+      ).toUpperCase();
 
       let utilisationName = "Utilisation inconnue";
       if (entry.utilisation_id && utilisationsMap[entry.utilisation_id]) {
@@ -91,6 +92,12 @@ async function checkNumeroDisponibilite(req, res) {
         utilisationName = entry.Pnn.Utilisation.nom;
       }
 
+      const dateAttribution = entry.AttributionNumero?.date_attribution
+        ? new Date(entry.AttributionNumero.date_attribution).toLocaleDateString(
+            "fr-FR"
+          )
+        : "Date inconnue";
+
       const categoryId = entry.AttributionNumero?.Service?.Category?.id;
       let messagePrefix = "Le numéro";
       if (categoryId === 1) {
@@ -98,7 +105,7 @@ async function checkNumeroDisponibilite(req, res) {
       }
 
       conflicts.push(
-        `${messagePrefix} ${entry.numero_attribue} a déjà été attribué à ${clientName} (${utilisationName})`
+        `${messagePrefix} ${entry.numero_attribue} a déjà été attribué à ${clientName} (${utilisationName}) le ${dateAttribution}`
       );
     }
 

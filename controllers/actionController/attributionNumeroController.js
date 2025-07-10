@@ -285,7 +285,7 @@ class AttributionNumeroController {
 
       const attributions = await AttributionNumero.findAll({
         where: whereConditions,
-        order: [["created_at", "DESC"]],
+        order: [["date_attribution", "DESC"]],
         include: [
           { model: Client },
           { model: Utilisation },
@@ -522,7 +522,7 @@ class AttributionNumeroController {
 
       const attributions = await AttributionNumero.findAll({
         where: whereConditions,
-        order: [["created_at", "DESC"]],
+        order: [["date_attribution", "DESC"]],
         include: [
           { model: Client },
           {
