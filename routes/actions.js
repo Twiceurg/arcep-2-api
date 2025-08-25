@@ -87,20 +87,20 @@ router.post(
 );
 router.get(
   "/zones-utilisation",
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin","user"),
   authenticateToken,
   zoneUtilisationController.getAll
 );
 router.get(
   "/zones-utilisation/utilisation/:utilisation_id",
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin","user"),
   authenticateToken,
   zoneUtilisationController.getByUtilisation
 );
 
 router.get(
   "/zones-utilisation/:id",
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin","user"),
   authenticateToken,
   zoneUtilisationController.getById
 );

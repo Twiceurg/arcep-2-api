@@ -16,9 +16,10 @@ const {
  * Vérifie si les numéros sont disponibles, déjà attribués ou hors plage.
  */
 async function checkNumeroDisponibilite(req, res) {
-  const { numeros } = req.body;
+  const { numeros, serviceId, utilisationId, zoneId } = req.body;
 
   console.log("Numéros reçus pour vérification :", numeros);
+  console.log("Filtres :", { serviceId, utilisationId, zoneId });
 
   if (!Array.isArray(numeros) || numeros.length === 0) {
     return res.json({
@@ -33,12 +34,23 @@ async function checkNumeroDisponibilite(req, res) {
     allUtilisations.forEach((u) => {
       utilisationsMap[u.id] = u.nom;
     });
-    // Récupérer les conflits d'attribution PNN
+
+    // Préparer les conditions de filtre
+    const pnnFilter = {
+      etat: true
+    };
+    if (serviceId) pnnFilter.service_id = serviceId;
+    if (utilisationId) pnnFilter.utilisation_id = utilisationId;
+    if (zoneId) pnnFilter.zone_utilisation_id = zoneId;
+
+    const numeroFilter = {
+      numero_attribue: { [Op.in]: numeros },
+      statut: { [Op.ne]: "libre" }
+    };
+
+    // Récupérer les conflits avec filtres aussi si souhaité
     const numeroConflicts = await NumeroAttribue.findAll({
-      where: {
-        numero_attribue: { [Op.in]: numeros },
-        statut: { [Op.ne]: "libre" }
-      },
+      where: numeroFilter,
       include: [
         {
           model: AttributionNumero,
@@ -52,6 +64,8 @@ async function checkNumeroDisponibilite(req, res) {
         },
         {
           model: Pnn,
+          where: pnnFilter,
+          required: false,
           include: [
             Utilisation,
             {
@@ -63,9 +77,9 @@ async function checkNumeroDisponibilite(req, res) {
       ]
     });
 
-    // Récupère tous les blocs valides avec utilisation, service et catégorie
+    // Récupérer les PNNs actifs filtrés
     const activePnns = await Pnn.findAll({
-      where: { etat: true },
+      where: pnnFilter,
       include: [
         Utilisation,
         {
@@ -125,22 +139,22 @@ async function checkNumeroDisponibilite(req, res) {
         (pnn) => numeroInt >= pnn.bloc_min && numeroInt <= pnn.block_max
       );
 
-      // if (!matchedPnn) {
-      //   outOfRangeNumeros.push(
-      //     `Le numéro ${numero} ne fait pas partie d’un bloc PNN valide.`
-      //   );
-      //   continue; // Important d'arrêter ici pour ce numéro
-      // }
-
-      if (!matchedPnn) {
-        if (numeroStr.length >= 3 && numeroStr.length <= 4) {
-          availableNumeros.push(
-            `Le numéro ${numero} est disponible (USSD détecté)`
+      if (!matchedPnn) { 
+        if (serviceId || utilisationId || zoneId) {
+          outOfRangeNumeros.push(
+            `Le numéro ${numero} n’est pas disponible pour le service sélectionné.`
           );
         } else {
-          outOfRangeNumeros.push(
-            `Le numéro ${numero} ne fait pas partie d’un bloc PNN  ou numero USSD valide.`
-          );
+          // Sinon, on accepte les USSD courts
+          if (numeroStr.length >= 3 && numeroStr.length <= 4) {
+            availableNumeros.push(
+              `Le numéro ${numero} est disponible (USSD détecté)`
+            );
+          } else {
+            outOfRangeNumeros.push(
+              `Le numéro ${numero} ne fait pas partie d’un bloc PNN ou USSD valide.`
+            );
+          }
         }
         continue;
       }
@@ -149,15 +163,9 @@ async function checkNumeroDisponibilite(req, res) {
         (entry) => String(entry.numero_attribue) === numeroStr
       );
 
-      if (isConflict) {
-        // Le message de conflit sera déjà ajouté dans la boucle précédente
-        // Si tu veux ici aussi, tu peux l'ajouter, mais évite la redondance
-        continue;
-      }
+      if (isConflict) continue;
 
-      // Numéro valide, pas de conflit
       const categoryId = matchedPnn.Service?.Category?.id;
-
       let messagePrefix = "Le numéro";
       if (categoryId === 1) {
         messagePrefix = "Le bloc";
@@ -165,7 +173,8 @@ async function checkNumeroDisponibilite(req, res) {
 
       const utilisationNom =
         matchedPnn.Utilisation?.nom ||
-        (utilisationsMap[matchedPnn.utilisation_id] ?? "Utilisation inconnue");
+        utilisationsMap[matchedPnn.utilisation_id] ||
+        "Utilisation inconnue";
 
       availableNumeros.push(
         `${messagePrefix} ${numero} est disponible. (${utilisationNom})`

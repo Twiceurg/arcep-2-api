@@ -19,7 +19,8 @@ const io = socketIo(server, {
       "http://192.168.95.27:3001",
       "http://192.168.95.27:3008",
       "http://192.168.95.23:3004",
-      "http://192.168.1.100:3001"
+      "http://192.168.1.100:3001",
+      "http://192.168.21.28:3004"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
@@ -36,7 +37,8 @@ app.use(
       "http://localhost:3004",
       "http://192.168.95.27:3001",
       "http://192.168.95.23:3004",
-      "http://192.168.1.100:3001"
+      "http://192.168.1.100:3001",
+      "http://192.168.21.28:3004"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],

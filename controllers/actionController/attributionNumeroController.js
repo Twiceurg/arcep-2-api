@@ -457,6 +457,29 @@ class AttributionNumeroController {
           return expDate >= today;
         });
       }
+      filteredAttributions.sort((a, b) => {
+        const aHasDecision = !!a.decision_pertinente;
+        const bHasDecision = !!b.decision_pertinente;
+
+        // Priorité : d'abord celles sans décision
+        if (!aHasDecision && bHasDecision) return -1;
+        if (aHasDecision && !bHasDecision) return 1;
+
+        // Si les deux n'ont pas de décision, trier par created_at (de l'attribution)
+        if (!aHasDecision && !bHasDecision) {
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+
+        // Si les deux ont une décision, trier par created_at de la décision
+        if (aHasDecision && bHasDecision) {
+          return (
+            new Date(b.decision_pertinente.created_at) -
+            new Date(a.decision_pertinente.created_at) 
+          );
+        }
+
+        return 0;
+      });
 
       return res.status(200).json(filteredAttributions);
     } catch (error) {
@@ -672,11 +695,43 @@ class AttributionNumeroController {
 
   static async getAllHistoriques(req, res) {
     try {
+      const {
+        utilisationId,
+        serviceId,
+        renouveler,
+        expirer,
+        startDate,
+        endDate,
+        mois,
+        annee
+      } = req.query;
+
+      // 🔍 Construction des filtres dynamiques
+      const whereClause = {};
+
+      if (startDate && endDate) {
+        whereClause.created_at = {
+          [Op.between]: [new Date(startDate), new Date(endDate)]
+        };
+      } else if (mois && annee) {
+        const start = new Date(`${annee}-${mois}-01`);
+        const end = new Date(start);
+        end.setMonth(end.getMonth() + 1);
+        whereClause.created_at = {
+          [Op.between]: [start, end]
+        };
+      }
+
       const historiques = await HistoriqueAttributionNumero.findAll({
+        where: whereClause,
         order: [["created_at", "DESC"]],
         include: [
           {
             model: AttributionNumero,
+            where: {
+              ...(serviceId && { service_id: serviceId }),
+              ...(utilisationId && { utilisation_id: utilisationId })
+            },
             include: [
               { model: Client },
               { model: Service },
@@ -788,7 +843,7 @@ class AttributionNumeroController {
             model: NumeroAttribue,
             where: {
               statut: {
-                [Op.notIn]: ["Retiré", "Résiliation","libre"]
+                [Op.notIn]: ["Retiré", "Résiliation", "libre"]
               }
             }
           }

@@ -128,19 +128,27 @@ const getTotalAndRemainingNumbers = async (req, res) => {
       start && end ? `AND na.date_attribution BETWEEN :start AND :end` : "";
 
     const query = `
-      SELECT 
-        tu.id AS type_utilisation_id,
-        tu.libele_type AS nom_type,
-        COUNT(na.id) AS total_numeros
-      FROM \`NumeroAttribues\` na
-      JOIN \`AttributionNumeros\` an ON an.id = na.attribution_id
-      JOIN \`TypeUtilisations\` tu ON tu.id = an.type_utilisation_id
-      WHERE na.statut = 'attribue'
-        AND an.utilisation_id = :utilisationId
-        ${dateFilter}
-      GROUP BY tu.id, tu.libele_type
-      ORDER BY total_numeros DESC
-    `;
+SELECT 
+  combinaison_utilisations,
+  COUNT(*) AS total
+FROM (
+  SELECT 
+    na.id AS numero_id,
+    GROUP_CONCAT(DISTINCT tu.libele_type ORDER BY tu.libele_type ASC SEPARATOR '+') AS combinaison_utilisations
+  FROM NumeroAttribues na
+  JOIN AttributionNumeros an ON an.id = na.attribution_id
+  JOIN TypeUtilisationAttributionNumeros tjan ON tjan.attribution_numero_id = an.id
+  JOIN TypeUtilisations tu ON tu.id = tjan.type_utilisation_id
+  WHERE na.statut = 'attribue'
+    AND an.utilisation_id = :utilisationId
+    ${dateFilter}
+  GROUP BY na.id
+) AS combinaisons
+GROUP BY combinaison_utilisations
+ORDER BY total DESC;
+
+
+`;
 
     const [numerosParType] = await sequelize.query(query, { replacements });
 
