@@ -87,20 +87,20 @@ router.post(
 );
 router.get(
   "/zones-utilisation",
-  authorizeRole("superadmin", "admin","user"),
+  authorizeRole("superadmin", "admin", "user"),
   authenticateToken,
   zoneUtilisationController.getAll
 );
 router.get(
   "/zones-utilisation/utilisation/:utilisation_id",
-  authorizeRole("superadmin", "admin","user"),
+  authorizeRole("superadmin", "admin", "user"),
   authenticateToken,
   zoneUtilisationController.getByUtilisation
 );
 
 router.get(
   "/zones-utilisation/:id",
-  authorizeRole("superadmin", "admin","user"),
+  authorizeRole("superadmin", "admin", "user"),
   authenticateToken,
   zoneUtilisationController.getById
 );
@@ -147,7 +147,7 @@ router.delete(
 router.post(
   "/pnns",
   authenticateToken,
-  authorizeRole("superadmin"),
+  authorizeRole("superadmin", "admin"),
   PnnController.createPnn
 );
 router.get(
@@ -159,7 +159,7 @@ router.get(
 router.put(
   "/pnns/:id",
   authenticateToken,
-  authorizeRole("superadmin"),
+  authorizeRole("superadmin", "admin"),
   PnnController.updatePnn
 );
 router.get(
@@ -171,7 +171,7 @@ router.get(
 router.delete(
   "/pnns/:id",
   authenticateToken,
-  authorizeRole("superadmin"),
+  authorizeRole("superadmin", "admin"),
   PnnController.deletePnn
 );
 router.get(
@@ -182,7 +182,7 @@ router.get(
 );
 router.patch(
   "/pnns/:id/toggle",
-  authorizeRole("superadmin"),
+  authorizeRole("superadmin", "admin"),
   PnnController.toggleEtat
 );
 router.get(
@@ -266,7 +266,7 @@ router.delete(
 router.post(
   "/attribution",
   authenticateToken,
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin", "user"),
   AttributionNumeroController.createAttribution
 );
 router.get(
@@ -675,7 +675,7 @@ router.get(
 
 router.post(
   "/ussd-attribution/create-ussd",
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin", "user"),
   authenticateToken,
   authenticateToken, // Middleware d'authentification
   AttributionUssdController.createUssdAttribution
@@ -784,7 +784,7 @@ router.get(
 // Appliquer une suspension
 router.post(
   "/historiqueUssd/suspension",
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin", "user"),
   authenticateToken,
   upload.single("fichier"),
   historiqueUSSDAttributionController.appliquerUssdSuspension
@@ -793,7 +793,7 @@ router.post(
 // Appliquer un retrait
 router.post(
   "/historiqueUssd/retrait",
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin", "user"),
   authenticateToken,
   upload.single("fichier"),
   historiqueUSSDAttributionController.appliquerUssdRetrait
