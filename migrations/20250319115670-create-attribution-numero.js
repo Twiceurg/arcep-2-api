@@ -9,17 +9,7 @@ module.exports = {
         primaryKey: true,
         type: Sequelize.INTEGER
       },
-      // type_utilisation_id: {
-      //   // Correction du nom de la colonne pour cohérence
-      //   type: Sequelize.INTEGER,
-      //   allowNull: true,
-      //   references: {
-      //     model: "TypeUtilisations", // Correction du nom du modèle cible
-      //     key: "id"
-      //   },
-      //   onDelete: "CASCADE",
-      //   onUpdate: "CASCADE"
-      // },
+ 
       service_id: {
         // Correction du nom pour cohérence
         type: Sequelize.INTEGER,

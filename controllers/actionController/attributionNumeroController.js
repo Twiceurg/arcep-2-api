@@ -379,19 +379,13 @@ class AttributionNumeroController {
           decision_pertinente: decisionPertinente
         };
       });
-      const filtrageActif =
-        utilisationId ||
-        serviceId ||
+      const filtrageDecision =
         renouveler === "true" ||
         renouveler === "false" ||
         expirer === "true" ||
-        expirer === "false" ||
-        mois ||
-        annee ||
-        startStr ||
-        endStr;
+        expirer === "false";
 
-      if (filtrageActif) {
+      if (filtrageDecision) {
         filteredAttributions = filteredAttributions.filter(
           (attr) => attr.decision_pertinente
         );
@@ -474,7 +468,7 @@ class AttributionNumeroController {
         if (aHasDecision && bHasDecision) {
           return (
             new Date(b.decision_pertinente.created_at) -
-            new Date(a.decision_pertinente.created_at) 
+            new Date(a.decision_pertinente.created_at)
           );
         }
 

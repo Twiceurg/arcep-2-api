@@ -47,10 +47,7 @@ module.exports = (sequelize, DataTypes) => {
   }
   AttributionNumero.init(
     {
-      type_utilisation_id: {
-        type: DataTypes.INTEGER,
-        allowNull: true
-      },
+ 
       service_id: {
         type: DataTypes.INTEGER,
         allowNull: true
@@ -72,14 +69,8 @@ module.exports = (sequelize, DataTypes) => {
           key: "id"
         }
       },
-      zone_utilisation_id: {
-        type: DataTypes.INTEGER,
-        allowNull: true
-      },
-      reference_decision: {
-        type: DataTypes.STRING,
-        allowNull: true
-      },
+ 
+ 
       regle: {
         type: DataTypes.STRING,
         allowNull: true
