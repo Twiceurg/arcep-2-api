@@ -72,7 +72,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
       date_attribution: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.DATE,
         allowNull: true
       },
       pnn_id: {

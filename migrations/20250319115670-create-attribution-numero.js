@@ -70,7 +70,7 @@ module.exports = {
         allowNull: true
       },
       date_attribution: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: false
       },
       etat_autorisation: {

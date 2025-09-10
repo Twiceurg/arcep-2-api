@@ -68,6 +68,22 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.BOOLEAN,
         defaultValue: false
       },
+      notification_envoyee_1mois: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_1semaine: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_jour_j: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_1semaine_apres: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
       fichier: {
         type: DataTypes.STRING,
         allowNull: true

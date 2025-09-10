@@ -43,11 +43,11 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false
       },
       date_renouvellement: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.DATE,
         allowNull: false
       },
       date_expiration_renouvellement: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.DATE,
         allowNull: false
       }
     },

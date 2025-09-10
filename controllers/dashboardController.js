@@ -15,144 +15,152 @@ const {
 
 const getTotalAndRemainingNumbers = async (req, res) => {
   try {
-    const utilisationId = req.params.utilisationId;
+    const utilisationId = parseInt(req.params.utilisationId);
     const { startDate, endDate, mois, annee } = req.query;
 
-    console.log("utilisationId:", utilisationId);
-    console.log("startDate:", startDate);
-    console.log("endDate:", endDate);
-    console.log("mois:", mois);
-    console.log("annee:", annee);
-
-    // Vérification de l'existence de l'utilisation
+    // 1️⃣ Vérification de l'existence de l'utilisation
     const utilisation = await Utilisation.findByPk(utilisationId);
     if (!utilisation) {
       return res.json({ success: false, message: "Utilisation non trouvée" });
     }
 
-    // Récupération des blocs PNN liés à cette utilisation
-    const pnns = await Pnn.findAll({
-      where: { utilisation_id: utilisationId },
-      attributes: ["id", "bloc_min", "block_max"]
-    });
-
-    let start = null;
-    let end = null;
-
-    // 🎯 Gestion des différentes options de date
+    // 2️⃣ Construction des bornes temporelles
+    let start = null,
+      end = null;
     if (startDate && endDate) {
       start = new Date(startDate);
       end = new Date(endDate);
       if (isNaN(start) || isNaN(end)) {
-        return res.json({ success: false, message: "Format de date invalide" });
+        return res.json({ success: false, message: "Dates invalides" });
       }
     } else if (annee && !mois) {
       const y = parseInt(annee);
-      if (isNaN(y)) {
-        return res.json({ success: false, message: "Année invalide" });
-      }
       start = new Date(y, 0, 1);
       end = new Date(y, 11, 31, 23, 59, 59);
     } else if (annee && mois) {
-      const m = parseInt(mois) - 1;
-      const y = parseInt(annee);
-      if (isNaN(m) || isNaN(y)) {
-        return res.json({ success: false, message: "Mois ou année invalide" });
-      }
+      const y = parseInt(annee),
+        m = parseInt(mois) - 1;
       start = new Date(y, m, 1);
       end = new Date(y, m + 1, 0, 23, 59, 59);
     } else if (mois && !annee) {
-      const m = parseInt(mois) - 1;
-      const y = new Date().getFullYear();
-      if (isNaN(m)) {
-        return res.json({ success: false, message: "Mois invalide" });
-      }
+      const y = new Date().getFullYear(),
+        m = parseInt(mois) - 1;
       start = new Date(y, m, 1);
       end = new Date(y, m + 1, 0, 23, 59, 59);
     }
 
-    // 📦 Préparation de la clause where pour NumeroAttribue
+    // 3️⃣ Récupération des PNN liés à l'utilisation
+    const pnns = await Pnn.findAll({
+      where: { utilisation_id: utilisationId },
+      attributes: [
+        "id",
+        "bloc_min",
+        "block_max",
+        "partition_prefix",
+        "partition_prefix_b",
+        "zone_utilisation_id"
+      ]
+    });
+
+    // 4️⃣ Préparation du filtre des numéros attribués
     const numeroWhere = {
-      statut: "attribue",
+      statut: { [Op.ne]: "libre" },
       utilisation_id: utilisationId
     };
-
     if (start && end) {
-      numeroWhere.date_attribution = {
-        [Op.between]: [start, end]
-      };
+      numeroWhere.date_attribution = { [Op.between]: [start, end] };
     }
 
-    // 🔢 Récupération des numéros attribués
-    const numerosAttribuesPNN = await NumeroAttribue.findAll({
-      where: numeroWhere
+    // 5️⃣ Récupération de TOUS les numéros attribués pour calculs
+    const numerosAttribues = await NumeroAttribue.findAll({
+      where: numeroWhere,
+      attributes: ["pnn_id", "numero_attribue"],
+      raw: true
     });
 
-    // 🧮 Création d’une map pour compter les numéros attribués par PNN
-    const allocatedCountMap = {};
-    numerosAttribuesPNN.forEach((num) => {
-      allocatedCountMap[num.pnn_id] = (allocatedCountMap[num.pnn_id] || 0) + 1;
+    // Regrouper les numéros attribués par PNN
+    const numerosByPnn = {};
+    numerosAttribues.forEach((num) => {
+      if (!numerosByPnn[num.pnn_id]) {
+        numerosByPnn[num.pnn_id] = [];
+      }
+      numerosByPnn[num.pnn_id].push(parseInt(num.numero_attribue, 10));
     });
 
-    // 📊 Calcul des statistiques globales
-    let totalNumbers = 0;
-    let allocatedNumbers = 0;
+    // 6️⃣ Calcul des totaux
+    let totalNumbers = 0,
+      allocatedNumbers = 0;
     const pnnRates = [];
 
     pnns.forEach((pnn) => {
       const count =
-        pnn.bloc_min && pnn.block_max ? pnn.block_max - pnn.bloc_min + 1 : 0;
-      const allocated = allocatedCountMap[pnn.id] || 0;
+        pnn.block_max && pnn.bloc_min ? pnn.block_max - pnn.bloc_min + 1 : 0;
+
       totalNumbers += count;
+
+      const allocatedList = numerosByPnn[pnn.id] || [];
+      const allocated = allocatedList.length;
       allocatedNumbers += allocated;
 
       const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
 
+      // ✅ Calcul des moitiés
+      const midPoint = Math.floor((pnn.block_max + pnn.bloc_min) / 2);
+
+      const firstHalfAllocated = allocatedList.filter(
+        (num) => num >= pnn.bloc_min && num <= midPoint
+      ).length;
+
+      const secondHalfAllocated = allocatedList.filter(
+        (num) => num > midPoint && num <= pnn.block_max
+      ).length;
+
       pnnRates.push({
-        bloc_id: pnn.id,
+        pnn_id: pnn.id,
+        prefixA: pnn.partition_prefix,
+        prefixB: pnn.partition_prefix_b,
+        ZoneUtilisation: pnn.zone_utilisation_id,
         total_numbers: count,
         allocated_numbers: allocated,
+        first_half_allocated: firstHalfAllocated, // ✅ Nombre attribué dans la 1ère moitié
+        second_half_allocated: secondHalfAllocated, // ✅ Nombre attribué dans la 2ème moitié
         occupancy_rate: occupancyRate.toFixed(2)
       });
     });
 
     const remainingNumbers = totalNumbers - allocatedNumbers;
 
-    // 📥 Requête SQL brute pour grouper les numéros attribués par type d'utilisation
-    const replacements = {
-      utilisationId,
-      ...(start && end ? { start, end } : {})
-    };
+    // 7️⃣ Requête SQL pour combinaisons types d'utilisation
+    const replacements = { utilisationId };
+    if (start && end) {
+      replacements.start = start;
+      replacements.end = end;
+    }
 
     const dateFilter =
-      start && end ? `AND na.date_attribution BETWEEN :start AND :end` : "";
+      start && end ? "AND na.date_attribution BETWEEN :start AND :end" : "";
 
     const query = `
-SELECT 
-  combinaison_utilisations,
-  COUNT(*) AS total
-FROM (
-  SELECT 
-    na.id AS numero_id,
-    GROUP_CONCAT(DISTINCT tu.libele_type ORDER BY tu.libele_type ASC SEPARATOR '+') AS combinaison_utilisations
-  FROM NumeroAttribues na
-  JOIN AttributionNumeros an ON an.id = na.attribution_id
-  JOIN TypeUtilisationAttributionNumeros tjan ON tjan.attribution_numero_id = an.id
-  JOIN TypeUtilisations tu ON tu.id = tjan.type_utilisation_id
-  WHERE na.statut = 'attribue'
-    AND an.utilisation_id = :utilisationId
-    ${dateFilter}
-  GROUP BY na.id
-) AS combinaisons
-GROUP BY combinaison_utilisations
-ORDER BY total DESC;
-
-
-`;
+      SELECT combinaison_utilisations, COUNT(*) AS total
+      FROM (
+        SELECT na.id AS numero_id,
+          GROUP_CONCAT(DISTINCT tu.libele_type ORDER BY tu.libele_type ASC SEPARATOR '+') AS combinaison_utilisations
+        FROM NumeroAttribues na
+        JOIN AttributionNumeros an ON an.id = na.attribution_id
+        JOIN TypeUtilisationAttributionNumeros tjan ON tjan.attribution_numero_id = an.id
+        JOIN TypeUtilisations tu ON tu.id = tjan.type_utilisation_id
+        WHERE na.statut = 'attribue'
+          AND an.utilisation_id = :utilisationId
+          ${dateFilter}
+        GROUP BY na.id
+      ) AS combinaisons
+      GROUP BY combinaison_utilisations
+      ORDER BY total DESC;
+    `;
 
     const [numerosParType] = await sequelize.query(query, { replacements });
 
-    // ✅ Réponse finale
+    // 8️⃣ Réponse finale
     return res.json({
       success: true,
       data: {
@@ -160,16 +168,177 @@ ORDER BY total DESC;
         total_numbers: totalNumbers,
         allocated_numbers: allocatedNumbers,
         remaining_numbers: remainingNumbers,
-        pnn_rates: pnnRates,
+        pnn_rates: pnnRates, // ✅ Contient la répartition par moitié
         numeros_par_type_utilisation: numerosParType
       }
     });
   } catch (error) {
     console.error("Erreur :", error);
-    return res.json({
-      success: false,
-      message: "Erreur serveur"
+    return res.json({ success: false, message: "Erreur serveur" });
+  }
+};
+const getTotalAndRemainingNumbersAction = async (req, res) => {
+  try {
+    const utilisationId = parseInt(req.params.utilisationId);
+    const { startDate, endDate, mois, annee } = req.query;
+
+    // 1️⃣ Vérification de l'existence de l'utilisation
+    const utilisation = await Utilisation.findByPk(utilisationId);
+    if (!utilisation) {
+      return res.json({ success: false, message: "Utilisation non trouvée" });
+    }
+
+    // 2️⃣ Construction des bornes temporelles
+    let start = null,
+      end = null;
+    if (startDate && endDate) {
+      start = new Date(startDate);
+      end = new Date(endDate);
+      if (isNaN(start) || isNaN(end)) {
+        return res.json({ success: false, message: "Dates invalides" });
+      }
+    } else if (annee && !mois) {
+      const y = parseInt(annee);
+      start = new Date(y, 0, 1);
+      end = new Date(y, 11, 31, 23, 59, 59);
+    } else if (annee && mois) {
+      const y = parseInt(annee),
+        m = parseInt(mois) - 1;
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0, 23, 59, 59);
+    } else if (mois && !annee) {
+      const y = new Date().getFullYear(),
+        m = parseInt(mois) - 1;
+      start = new Date(y, m, 1);
+      end = new Date(y, m + 1, 0, 23, 59, 59);
+    }
+
+    // 3️⃣ Récupération des PNN liés à l'utilisation
+    const pnns = await Pnn.findAll({
+      where: { utilisation_id: utilisationId, etat: true },
+      attributes: [
+        "id",
+        "bloc_min",
+        "block_max",
+        "partition_prefix",
+        "partition_prefix_b",
+        "zone_utilisation_id"
+      ]
     });
+
+    // 4️⃣ Préparation du filtre des numéros attribués
+    const numeroWhere = {
+      statut: { [Op.ne]: "libre" },
+      utilisation_id: utilisationId
+    };
+    if (start && end) {
+      numeroWhere.date_attribution = { [Op.between]: [start, end] };
+    }
+
+    // 5️⃣ Récupération de TOUS les numéros attribués pour calculs
+    const numerosAttribues = await NumeroAttribue.findAll({
+      where: numeroWhere,
+      attributes: ["pnn_id", "numero_attribue"],
+      raw: true
+    });
+
+    // Regrouper les numéros attribués par PNN
+    const numerosByPnn = {};
+    numerosAttribues.forEach((num) => {
+      if (!numerosByPnn[num.pnn_id]) {
+        numerosByPnn[num.pnn_id] = [];
+      }
+      numerosByPnn[num.pnn_id].push(parseInt(num.numero_attribue, 10));
+    });
+
+    // 6️⃣ Calcul des totaux
+    let totalNumbers = 0,
+      allocatedNumbers = 0;
+    const pnnRates = [];
+
+    pnns.forEach((pnn) => {
+      const count =
+        pnn.block_max && pnn.bloc_min ? pnn.block_max - pnn.bloc_min + 1 : 0;
+
+      totalNumbers += count;
+
+      const allocatedList = numerosByPnn[pnn.id] || [];
+      const allocated = allocatedList.length;
+      allocatedNumbers += allocated;
+
+      const occupancyRate = count > 0 ? (allocated / count) * 100 : 0;
+
+      // ✅ Calcul des moitiés
+      const midPoint = Math.floor((pnn.block_max + pnn.bloc_min) / 2);
+
+      const firstHalfAllocated = allocatedList.filter(
+        (num) => num >= pnn.bloc_min && num <= midPoint
+      ).length;
+
+      const secondHalfAllocated = allocatedList.filter(
+        (num) => num > midPoint && num <= pnn.block_max
+      ).length;
+
+      pnnRates.push({
+        pnn_id: pnn.id,
+        prefixA: pnn.partition_prefix,
+        prefixB: pnn.partition_prefix_b,
+        ZoneUtilisation: pnn.zone_utilisation_id,
+        total_numbers: count,
+        allocated_numbers: allocated,
+        first_half_allocated: firstHalfAllocated, // ✅ Nombre attribué dans la 1ère moitié
+        second_half_allocated: secondHalfAllocated, // ✅ Nombre attribué dans la 2ème moitié
+        occupancy_rate: occupancyRate.toFixed(2)
+      });
+    });
+
+    const remainingNumbers = totalNumbers - allocatedNumbers;
+
+    // 7️⃣ Requête SQL pour combinaisons types d'utilisation
+    const replacements = { utilisationId };
+    if (start && end) {
+      replacements.start = start;
+      replacements.end = end;
+    }
+
+    const dateFilter =
+      start && end ? "AND na.date_attribution BETWEEN :start AND :end" : "";
+
+    const query = `
+      SELECT combinaison_utilisations, COUNT(*) AS total
+      FROM (
+        SELECT na.id AS numero_id,
+          GROUP_CONCAT(DISTINCT tu.libele_type ORDER BY tu.libele_type ASC SEPARATOR '+') AS combinaison_utilisations
+        FROM NumeroAttribues na
+        JOIN AttributionNumeros an ON an.id = na.attribution_id
+        JOIN TypeUtilisationAttributionNumeros tjan ON tjan.attribution_numero_id = an.id
+        JOIN TypeUtilisations tu ON tu.id = tjan.type_utilisation_id
+        WHERE na.statut = 'attribue'
+          AND an.utilisation_id = :utilisationId
+          ${dateFilter}
+        GROUP BY na.id
+      ) AS combinaisons
+      GROUP BY combinaison_utilisations
+      ORDER BY total DESC;
+    `;
+
+    const [numerosParType] = await sequelize.query(query, { replacements });
+
+    // 8️⃣ Réponse finale
+    return res.json({
+      success: true,
+      data: {
+        nom: utilisation.nom,
+        total_numbers: totalNumbers,
+        allocated_numbers: allocatedNumbers,
+        remaining_numbers: remainingNumbers,
+        pnn_rates: pnnRates, // ✅ Contient la répartition par moitié
+        numeros_par_type_utilisation: numerosParType
+      }
+    });
+  } catch (error) {
+    console.error("Erreur :", error);
+    return res.json({ success: false, message: "Erreur serveur" });
   }
 };
 
@@ -220,13 +389,12 @@ const TableauRecap = async (req, res) => {
       previousYearEnd.setFullYear(previousYearEnd.getFullYear() - 1);
     }
 
-    const whereAttribue = {
-      statut: { [Op.ne]: "libre" }
-    };
+    const whereAttribue = { statut: { [Op.ne]: "libre" } };
     if (start && end) {
-      whereAttribue.date_attribution = {
-        [Op.between]: [start, end]
-      };
+      whereAttribue.date_attribution = { [Op.between]: [start, end] };
+    }
+    if (utilisation_id) {
+      whereAttribue.utilisation_id = utilisation_id;
     }
 
     const wherePnn = {};
@@ -234,8 +402,14 @@ const TableauRecap = async (req, res) => {
       wherePnn.utilisation_id = utilisation_id;
     }
 
+    // Récupérer les PNN avec leurs numéros attribués
     const pnns = await Pnn.findAll({
-      where: wherePnn,
+      where: {
+        ...wherePnn,
+        partition_length: { [Op.ne]: null },
+        bloc_min: { [Op.ne]: null },
+        block_max: { [Op.ne]: null }
+      },
       attributes: [
         "id",
         "bloc_min",
@@ -258,6 +432,7 @@ const TableauRecap = async (req, res) => {
       ]
     });
 
+    // PNN pour l'année précédente
     const pnnsAnneePrecedente = await Pnn.findAll({
       where: wherePnn,
       attributes: ["id", "bloc_min", "block_max"],
@@ -284,8 +459,7 @@ const TableauRecap = async (req, res) => {
       const blocMax = pnn.block_max || 0;
       const total = blocMax >= blocMin ? blocMax - blocMin + 1 : 0;
       const attribues = pnn.NumeroAttribues?.length || 0;
-      const disponibles = total - attribues;
-      totalDisponibleAnneePrecedenteMap[pnn.id] = disponibles;
+      totalDisponibleAnneePrecedenteMap[pnn.id] = total - attribues;
     });
 
     const totalDisponibleAnneePrecedente = Object.values(
@@ -300,9 +474,23 @@ const TableauRecap = async (req, res) => {
       const blocMin = pnn.bloc_min || 0;
       const blocMax = pnn.block_max || 0;
       const totalInBloc = blocMax >= blocMin ? blocMax - blocMin + 1 : 0;
-      const allocated =
-        pnn.NumeroAttribues?.filter((num) => num.statut !== "libre").length ||
-        0;
+
+      // Filtrer uniquement les numéros attribués qui ont le même utilisation_id que le PNN
+      const allocatedNumbersList =
+        pnn.NumeroAttribues?.filter(
+          (num) =>
+            num.statut !== "libre" && num.utilisation_id === pnn.utilisation_id
+        ) || [];
+
+      const allocated = allocatedNumbersList.length;
+
+      const numeroAttribueList = allocatedNumbersList.map(
+        (num) => num.numero_attribue || num.id
+      );
+
+      console.log(`PNN ID: ${pnn.id}, Bloc: [${blocMin}-${blocMax}]`);
+      console.log("Numéros attribués :", numeroAttribueList);
+      console.log(`Total attribués dans ce PNN: ${allocated}\n`);
 
       totalNumbers += totalInBloc;
       allocatedNumbers += allocated;
@@ -310,15 +498,12 @@ const TableauRecap = async (req, res) => {
       const utilisationId = pnn.Utilisation?.id || 0;
       const utilisationName = pnn.Utilisation?.nom || "Inconnu";
 
-      // ✅ Astuce pour forcer séparation pour utilisation_id = 12
       const key =
         utilisationId === 12
           ? `${utilisationId}||${utilisationName}||pnn_${pnn.id}`
           : `${utilisationId}||${utilisationName}`;
 
-      if (!utilisationMap[key]) {
-        utilisationMap[key] = [];
-      }
+      if (!utilisationMap[key]) utilisationMap[key] = [];
 
       utilisationMap[key].push({
         pnn_id: pnn.id,
@@ -329,6 +514,7 @@ const TableauRecap = async (req, res) => {
         partition_prefix_b: pnn.partition_prefix_b,
         total_numbers: totalInBloc,
         allocated_numbers: allocated,
+        numero_attribue_list: numeroAttribueList,
         total_disponible_annee_precedente:
           totalDisponibleAnneePrecedenteMap[pnn.id] || 0,
         total_ressource_restante: totalInBloc - allocated,
@@ -741,7 +927,15 @@ const getAllTotalAndRemainingNumbers = async (req, res) => {
         const count =
           blocMin && blocMax && blocMin <= blocMax ? blocMax - blocMin + 1 : 0;
 
-        const allocated = allocatedCountMap[entity.id] || 0;
+        // ✅ Nouveau filtrage par utilisation
+        const allocatedNumbersList = numbers.filter(
+          (num) =>
+            num.pnn_id === entity.id &&
+            num.statut !== "libre" &&
+            num.utilisation_id === entity.utilisation_id
+        );
+
+        const allocated = allocatedNumbersList.length;
 
         groupTotalNumbers += count;
         groupAllocatedNumbers += allocated;
@@ -913,7 +1107,10 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
 
     const pnns = await Pnn.findAll({
       where: {
-        utilisation_id: { [Op.in]: utilisationsCibles }
+        utilisation_id: { [Op.in]: utilisationsCibles },
+        partition_length: { [Op.ne]: null },
+        bloc_min: { [Op.ne]: null },
+        block_max: { [Op.ne]: null }
       },
       include: [
         {
@@ -967,6 +1164,15 @@ const getHistoriqueAttributionsParUtilisation = async (req, res) => {
           total_attributions: 0,
           historique: {}
         };
+      }
+
+      if (utilisationId === 11) {
+        console.log(
+          "PNN:",
+          pnn.partition_prefix,
+          "Numéro attribué:",
+          attribue.id
+        );
       }
 
       const blocSize = pnn.block_max - pnn.bloc_min + 1;
@@ -1138,5 +1344,6 @@ module.exports = {
   getAllTotalAndRemainingNumbers,
   TableauRecap,
   getHistoriqueAttributionsParUtilisation,
-  getHistoriqueSVA
+  getHistoriqueSVA,
+  getTotalAndRemainingNumbersAction
 };

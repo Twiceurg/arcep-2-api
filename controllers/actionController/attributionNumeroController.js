@@ -660,6 +660,190 @@ class AttributionNumeroController {
     }
   }
 
+  static async getAllAttributionsBlocParOperateur(req, res) {
+    try {
+      const {
+        utilisationId,
+        serviceId,
+        expirer,
+        mois,
+        annee,
+        startDate: startStr,
+        endDate: endStr
+      } = req.query;
+
+      const whereConditions = {};
+      let startDate, endDate;
+
+      if (utilisationId) whereConditions.utilisation_id = utilisationId;
+      if (serviceId) whereConditions.service_id = serviceId;
+
+      // 🎯 Filtrage par date
+      if (startStr && endStr) {
+        startDate = new Date(startStr);
+        endDate = new Date(endStr);
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (mois && annee) {
+        startDate = new Date(annee, mois - 1, 1);
+        endDate = new Date(annee, mois, 0);
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (annee) {
+        startDate = new Date(annee, 0, 1);
+        endDate = new Date(annee, 11, 31);
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      } else if (mois) {
+        const currentYear = new Date().getFullYear();
+        startDate = new Date(currentYear, mois - 1, 1);
+        endDate = new Date(currentYear, mois, 0);
+        whereConditions.date_attribution = {
+          [Sequelize.Op.gte]: startDate,
+          [Sequelize.Op.lte]: endDate
+        };
+      }
+
+      // 📌 Récupération des attributions
+      const attributions = await AttributionNumero.findAll({
+        where: whereConditions,
+        order: [["date_attribution", "DESC"]],
+        include: [
+          { model: Client },
+          { model: AttributionDecision },
+          { model: Service, include: [{ model: Category }] },
+          { model: TypeUtilisation, through: { attributes: [] } },
+          { model: Pnn, include: [{ model: Utilisation }] },
+          { model: NumeroAttribue }, // ⚠️ Plusieurs numéros possibles
+          { model: Rapport }
+        ]
+      });
+
+      // 🎯 Fonction pour trouver la décision pertinente
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
+        if (resiliation) return resiliation;
+
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        )
+          return suspension;
+
+        const modifOrRecla = sorted.find(
+          (d) =>
+            d.type_decision === "modification" ||
+            d.type_decision === "reclamation"
+        );
+        if (modifOrRecla) return modifOrRecla;
+
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) return renouvellement;
+
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
+      // 🗂️ Pré-traitement
+      let filteredAttributions = attributions.map((attr) => {
+        const attrPlain = attr.get({ plain: true });
+        const decisionPertinente = getDecisionPertinente(
+          attrPlain.AttributionDecisions
+        );
+        return { ...attrPlain, decision_pertinente: decisionPertinente };
+      });
+
+      // 🎯 Filtres supplémentaires
+      if (serviceId) {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) => attr.Service && attr.Service.id === parseInt(serviceId)
+        );
+      }
+
+      if (utilisationId) {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) =>
+            attr.Pnn &&
+            attr.Pnn.Utilisation &&
+            attr.Pnn.Utilisation.id === parseInt(utilisationId)
+        );
+      }
+
+      filteredAttributions = filteredAttributions.filter(
+        (attr) => attr.Service && attr.Service.Category.id === 1
+      );
+
+      if (expirer === "true") {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) =>
+            !attr.decision_pertinente?.date_expiration ||
+            new Date(attr.decision_pertinente.date_expiration) < new Date()
+        );
+      } else if (expirer === "false") {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) =>
+            attr.decision_pertinente?.date_expiration &&
+            new Date(attr.decision_pertinente.date_expiration) > new Date()
+        );
+      }
+
+      // ➤ Regroupement par PNN puis par Client
+      // ➤ Regroupement par PNN puis par Client
+      const groupedData = filteredAttributions.reduce((acc, attr) => {
+        const pnnId = attr.Pnn?.id || "inconnu";
+        const clientId = attr.Client?.id || "inconnu";
+
+        if (!acc[pnnId]) acc[pnnId] = { pnn: attr.Pnn, clients: {} };
+        if (!acc[pnnId].clients[clientId])
+          acc[pnnId].clients[clientId] = { client: attr.Client, numeros: [] };
+
+        // ✅ Ajout UNIQUEMENT des numéros dont le statut est différent de "libre"
+        if (
+          Array.isArray(attr.NumeroAttribues) &&
+          attr.NumeroAttribues.length > 0
+        ) {
+          attr.NumeroAttribues.forEach((num) => {
+            if (num.numero_attribue && num.statut !== "libre") {
+              acc[pnnId].clients[clientId].numeros.push(num.numero_attribue);
+            }
+          });
+        }
+
+        return acc;
+      }, {});
+
+      // ➤ Conversion finale
+      const result = Object.values(groupedData).map((pnnGroup) => ({
+        pnn: pnnGroup.pnn,
+        clients: Object.values(pnnGroup.clients)
+      }));
+
+      return res.status(200).json(result);
+    } catch (error) {
+      console.error(error);
+      return res.json({ success: false, message: "Erreur interne du serveur" });
+    }
+  }
+
   static async getHistoriqueByAttributionId(req, res) {
     try {
       const { id } = req.params; // id de l'attribution
@@ -806,7 +990,7 @@ class AttributionNumeroController {
 
       return res.status(200).json({
         success: true,
-        data: historiquesWithDecision
+        data: historiques
       });
     } catch (error) {
       console.error("Erreur lors de la récupération des historiques:", error);
@@ -1209,41 +1393,46 @@ class AttributionNumeroController {
         return res.json({ success: false, error: "PNN ID est requis." });
       }
 
-      // Recherche des attributions pour ce PNN avec état autorisation true
+      // Récupérer le PNN pour obtenir son utilisation_id
+      const pnn = await Pnn.findByPk(pnn_id);
+      if (!pnn) {
+        return res
+          .status(404)
+          .json({ success: false, error: "PNN non trouvé." });
+      }
+      const pnnUtilisationId = pnn.utilisation_id;
+
+      // Recherche des attributions pour ce PNN avec le même utilisation_id
       const attributions = await AttributionNumero.findAll({
         where: {
-          pnn_id
+          pnn_id,
+          utilisation_id: pnnUtilisationId
         },
-        attributes: ["id"] // On récupère l'id de l'attribution
+        attributes: ["id"]
       });
 
-      // Vérifier si des attributions ont été trouvées
       if (!attributions || attributions.length === 0) {
-        return res.status(200).json([]); // Retourne un tableau vide si aucune attribution trouvée
+        return res.status(200).json([]);
       }
 
-      // Extraire les IDs des attributions pour la requête suivante
-      const attributionIds = attributions.map((attribution) => attribution.id);
+      const attributionIds = attributions.map((attr) => attr.id);
 
-      // Rechercher les numéros attribués dans la table NumeroAttribues
       const assignedNumbers = await NumeroAttribue.findAll({
         where: {
           attribution_id: {
-            [Op.in]: attributionIds // Rechercher les numéros attribués pour ces attributions
+            [Op.in]: attributionIds
           },
           statut: {
-            [Op.ne]: "libre" // Vérifier que le statut est différent de "libre"
+            [Op.ne]: "libre"
           }
         },
-        attributes: ["numero_attribue"] // On récupère seulement les numéros attribués
+        attributes: ["numero_attribue"]
       });
 
-      // Vérifier si des numéros ont été trouvés
       if (!assignedNumbers || assignedNumbers.length === 0) {
-        return res.status(200).json([]); // Retourner un tableau vide si aucun numéro attribué
+        return res.status(200).json([]);
       }
 
-      // Retourner les numéros attribués
       return res.status(200).json(assignedNumbers);
     } catch (error) {
       console.error(
@@ -1256,38 +1445,49 @@ class AttributionNumeroController {
 
   static async getAssignedNumbersByUssd(req, res) {
     try {
+      // console.log("🔹 Début getAssignedNumbersByUssd");
+
+      // Récupération des attributions pour le PNN avec utilisation_id = 15
       const attributions = await AttributionNumero.findAll({
-        where: {
-          utilisation_id: 15
-        },
+        where: { utilisation_id: 15 },
         attributes: ["id"]
       });
+      // console.log("🔹 Attributions trouvées :", attributions);
 
       if (!attributions || attributions.length === 0) {
-        return res.json({ success: false }); // Pas d'attributions
+        console.log("⚠️ Pas d'attributions pour utilisation_id = 15");
+        return res.json({ success: false });
       }
 
       const attributionIds = attributions.map((a) => a.id);
+      // console.log("🔹 IDs des attributions :", attributionIds);
 
+      // Récupération des numéros attribués
       const assignedNumbers = await NumeroAttribue.findAll({
         where: {
           attribution_id: { [Op.in]: attributionIds },
+          utilisation_id: 15,
           statut: { [Op.ne]: "libre" }
         },
         attributes: ["numero_attribue"]
       });
+      // console.log("🔹 Numéros attribués :", assignedNumbers);
 
       if (!assignedNumbers || assignedNumbers.length === 0) {
-        return res.json({ success: false }); // Pas de numéros attribués
+        // console.log("⚠️ Aucun numéro attribué pour ces attributions");
+        return res.json({ success: false });
       }
 
-      return res.json({ success: true }); // Succès
+      const numeros = assignedNumbers.map((n) => n.numero_attribue);
+      // console.log("🔹 Numéros finaux à renvoyer :", numeros);
+
+      return res.json({ success: true, numeros });
     } catch (error) {
       console.error(
-        "Erreur lors de la récupération des numéros USSD attribués :",
+        "❌ Erreur lors de la récupération des numéros USSD attribués :",
         error
       );
-      return res.json({ success: false }); // Erreur = échec
+      return res.json({ success: false });
     }
   }
 
@@ -1305,19 +1505,53 @@ class AttributionNumeroController {
         where: { client_id },
         include: [
           { model: Service },
-          {
-            model: TypeUtilisation,
-            through: { attributes: [] }
-          },
-          {
-            model: Pnn,
-            include: [{ model: Utilisation }]
-          },
-          { model: NumeroAttribue }
+          { model: TypeUtilisation, through: { attributes: [] } },
+          { model: Pnn, include: [{ model: Utilisation }] },
+          { model: NumeroAttribue },
+          { model: AttributionDecision } // récupère toutes les décisions
         ]
       });
 
-      // Vérifie s’il y a au moins une attribution
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
+        if (resiliation) return resiliation;
+
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        ) {
+          return suspension;
+        }
+
+        const modifOrRecla = sorted.find(
+          (d) =>
+            d.type_decision === "modification" ||
+            d.type_decision === "reclamation"
+        );
+        if (modifOrRecla) return modifOrRecla;
+
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) return renouvellement;
+
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
       if (!attributions || attributions.length === 0) {
         return res.json({
           success: false,
@@ -1325,11 +1559,18 @@ class AttributionNumeroController {
         });
       }
 
-      // Retourne les deux blocs
+      // Ajout de decision_pertinente à chaque attribution
+      const formattedAttributions = attributions.map((att) => ({
+        ...att.toJSON(),
+        decision_pertinente: getDecisionPertinente(
+          att.AttributionDecisions || []
+        )
+      }));
+
       return res.json({
         success: true,
-        attributionsClassiques: attributions,
-        attributionsUSSD: ussdAttributions
+        attributionsClassiques: formattedAttributions // les données brutes
+        // attributions: formattedAttributions // données enrichies avec decision_pertinente
       });
     } catch (error) {
       console.error(error);

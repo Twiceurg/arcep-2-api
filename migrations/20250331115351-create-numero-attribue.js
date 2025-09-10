@@ -23,7 +23,7 @@ module.exports = {
         allowNull: false
       },
       date_attribution: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: true
       },
       pnn_id: {

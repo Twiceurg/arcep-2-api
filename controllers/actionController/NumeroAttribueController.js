@@ -2,6 +2,7 @@ const {
   NumeroAttribue,
   AttributionNumero,
   AttributionDecision,
+  Pnn,
   Client
 } = require("../../models");
 
@@ -107,7 +108,8 @@ exports.countAssignedInRange = async (req, res) => {
     const { bloc_min, bloc_max } = req.query;
 
     if (!bloc_min || !bloc_max) {
-      return res .json({ success: false,
+      return res.json({
+        success: false,
         message: "Les paramètres bloc_min et bloc_max sont requis"
       });
     }
@@ -135,22 +137,30 @@ exports.countAssignedInRange = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur lors du comptage des numéros dans la plage :", error);
-    return res.json({success: false, message: "Erreur interne du serveur" });
+    return res.json({ success: false, message: "Erreur interne du serveur" });
   }
 };
 
 exports.countAttributionGapByPnn = async (req, res) => {
   try {
     const { pnnId } = req.params;
+    console.log("🔹 Début countAttributionGapByPnn, pnnId:", pnnId);
 
-    if (!pnnId) {
-      return res.json({ success: false, message: "pnnId est requis" });
+    const pnn = await Pnn.findByPk(pnnId);
+
+    if (!pnn) {
+      console.log("⚠️ PNN non trouvé pour l'id:", pnnId);
+      return res.json({ success: false, message: "PNN non trouvé" });
     }
+
+    const utilisationId = pnn.utilisation_id;
+    console.log("🔹 utilisation_id du PNN sélectionné:", utilisationId);
 
     // 1. Nombre d'attributions pour le PNN sélectionné
     const selectedCount = await NumeroAttribue.count({
       where: {
         pnn_id: pnnId,
+        utilisation_id: utilisationId,
         statut: { [Op.not]: "libre" },
         numero_attribue: {
           [Op.and]: {
@@ -160,6 +170,7 @@ exports.countAttributionGapByPnn = async (req, res) => {
         }
       }
     });
+    console.log("🔹 Nombre d'attributions du PNN sélectionné:", selectedCount);
 
     // 2. Attributions pour tous les autres PNN
     const allCounts = await NumeroAttribue.findAll({
@@ -185,6 +196,7 @@ exports.countAttributionGapByPnn = async (req, res) => {
       },
       group: ["pnn_id"]
     });
+    console.log("🔹 Attributions des autres PNN:", allCounts);
 
     let hasGap = false;
     let details = [];
@@ -193,6 +205,9 @@ exports.countAttributionGapByPnn = async (req, res) => {
     for (const item of allCounts) {
       const otherCount = parseInt(item.dataValues.count);
       const ecart = selectedCount - otherCount;
+      console.log(
+        `📊 Comparaison avec PNN ${item.pnn_id}: autres=${otherCount}, écart=${ecart}`
+      );
 
       if (ecart > 5) {
         hasGap = true;
@@ -200,8 +215,12 @@ exports.countAttributionGapByPnn = async (req, res) => {
           pnn_compare_id: item.pnn_id,
           ecart
         });
+        console.log(`⚠️ Écart > 5 détecté avec PNN ${item.pnn_id}`);
       }
     }
+
+    console.log("🔹 hasGap final:", hasGap);
+    console.log("🔹 Détails des écarts:", details);
 
     return res.json({
       success: true,
@@ -210,10 +229,13 @@ exports.countAttributionGapByPnn = async (req, res) => {
       message: hasGap
         ? "Le PNN sélectionné dépasse certains autres PNN de plus de 5 attributions."
         : "Pas d'écart important détecté.",
-      details // contient les pnn_id comparés et les écarts
+      details
     });
   } catch (error) {
-    console.error("Erreur lors de la vérification d'écart entre PNN :", error);
+    console.error(
+      "❌ Erreur lors de la vérification d'écart entre PNN :",
+      error
+    );
     return res.json({ success: false, message: "Erreur interne du serveur" });
   }
 };
@@ -224,12 +246,14 @@ exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
     const { digit, prefix } = req.query;
 
     if (!digit || ![3, 4].includes(Number(digit))) {
-      return res .json({ success: false,
+      return res.json({
+        success: false,
         message: "Le paramètre digit (3 ou 4) est requis"
       });
     }
     if (!prefix) {
-      return res.json({ success: false,
+      return res.json({
+        success: false,
         message: "Le paramètre prefix est requis"
       });
     }
@@ -244,6 +268,7 @@ exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
         numero_attribue: {
           [Op.between]: [min, max]
         },
+        utilisation_id: 15,
         statut: { [Op.not]: "libre" },
         [Op.or]: [{ pnn_id: null }, { pnn_id: "" }],
         [Op.and]: [
@@ -268,7 +293,7 @@ exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
       "Erreur lors du comptage des USSD par digit et prefix :",
       error
     );
-    return res .json({success: false, message: "Erreur interne du serveur" });
+    return res.json({ success: false, message: "Erreur interne du serveur" });
   }
 };
 
@@ -277,7 +302,8 @@ exports.countUssdGapByDigitAndPrefix = async (req, res) => {
   try {
     const { digit } = req.query;
     if (!digit || ![3, 4].includes(Number(digit))) {
-      return res .json({success: false,
+      return res.json({
+        success: false,
         message: "Le paramètre digit (3 ou 4) est requis"
       });
     }
@@ -356,8 +382,6 @@ exports.countUssdGapByDigitAndPrefix = async (req, res) => {
       "Erreur lors de la vérification d'écart USSD par digit et prefixe :",
       error
     );
-    return res
-      
-      .json({ success: false, message: "Erreur interne du serveur" });
+    return res.json({ success: false, message: "Erreur interne du serveur" });
   }
 };

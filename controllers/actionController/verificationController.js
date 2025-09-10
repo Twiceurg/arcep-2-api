@@ -146,9 +146,43 @@ async function checkNumeroDisponibilite(req, res) {
       );
 
       if (!matchedPnn) {
-        outOfRangeNumeros.push(
-          `Le numéro ${numero} ne fait pas partie d’un bloc PNN valide.`
-        );
+        const serviceChoisi =
+          activePnns.length > 0 ? activePnns[0].Service?.nom : null; // pas de service choisi
+
+        let message;
+
+        // Vérifier si au moins un filtre est choisi
+        const filtreChoisi = serviceId || utilisationId;
+
+        if (filtreChoisi && serviceChoisi) {
+          // Cas où un service/utilisation est sélectionné : afficher le service + plages
+          const plages = activePnns
+            .map((pnn) => ({ min: pnn.bloc_min, max: pnn.block_max }))
+            .sort((a, b) => a.min - b.min);
+
+          message = `Le numéro ${numero} est hors plage pour les  ${serviceChoisi} .\n`;
+
+          // Ajouter les plages seulement si elles existent
+          if (plages.length > 0) {
+            message += "Pour ce service, les plages valides sont :\n";
+            for (let i = 0; i < plages.length; i += 2) {
+              const first = plages[i];
+              const second = plages[i + 1];
+              if (second) {
+                message += `- ${first.min} → ${first.max}     |     ${second.min} → ${second.max}\n`;
+              } else {
+                message += `- ${first.min} → ${first.max}\n`;
+              }
+            }
+          } else {
+            message += "Aucune plage valide n'est définie pour ce service.";
+          }
+        } else {
+          // Aucun service/utilisation choisi : message simple
+          message = `Le numéro ${numero} est hors plage.`;
+        }
+
+        outOfRangeNumeros.push(message.trim());
         continue;
       }
 

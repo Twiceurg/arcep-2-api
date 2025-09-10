@@ -28,7 +28,7 @@ module.exports = {
         allowNull: true,
       },
       date_attribution: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: false,
       },
       type_decision: {
@@ -40,7 +40,7 @@ module.exports = {
         defaultValue: false,
       },
       date_expiration: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: true,
       },
       etat_autorisation: {

@@ -29,6 +29,15 @@ const io = socketIo(server, {
   }
 });
 
+// const io = socketIo(server, {
+//   cors: {
+//     origin: ["http://10.1.25.6:3000"],
+//     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+//     credentials: true
+//   }
+// });
+
 setIo(io); // <--- assigner l'instance ici
 
 app.use(
@@ -47,6 +56,15 @@ app.use(
     credentials: true
   })
 );
+
+// app.use(
+//   cors({
+//     origin: ["http://10.1.25.6:3000"],
+//     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+//     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
+//     credentials: true
+//   })
+// );
 
 app.use("/uploads", express.static(path.join(__dirname, "utils", "uploads")));
 
@@ -77,5 +95,9 @@ io.on("connection", (socket) => {
 });
 
 server.listen(port, () => {
-  console.log(`Serveur lancé à http://localhost:${port}`);
+  console.log(`Serveur lancé à http://10.1.25.6:${port}`);
 });
+
+// server.listen(port, () => {
+//   console.log(`Serveur lancé à http://localhost:${port}`);
+// });

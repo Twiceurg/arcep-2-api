@@ -276,6 +276,12 @@ router.get(
   AttributionNumeroController.getAllAttributionsBloc
 );
 router.get(
+  "/attribution/blocParOperateur",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  AttributionNumeroController.getAllAttributionsBlocParOperateur
+);
+router.get(
   "/attribution",
   authenticateToken,
   authorizeRole("superadmin", "admin", "user"),
@@ -841,6 +847,12 @@ router.get(
   authenticateToken,
   authorizeRole("admin", "user", "superadmin"),
   dashboardController.getTotalAndRemainingNumbers
+);
+router.get(
+  "/dashboard/:utilisationId/Actionattributions",
+  authenticateToken,
+  authorizeRole("admin", "user", "superadmin"),
+  dashboardController.getTotalAndRemainingNumbersAction
 );
 router.get(
   "/dashboard",
