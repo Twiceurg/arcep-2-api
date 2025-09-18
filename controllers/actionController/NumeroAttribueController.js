@@ -6,7 +6,7 @@ const {
   Client
 } = require("../../models");
 
-const { Op, fn, col } = require("sequelize");
+const { Op, fn, col, literal } = require("sequelize");
 
 exports.getAllNumerosAvecAttribution = async (req, res) => {
   try {
@@ -60,7 +60,7 @@ exports.getAllNumerosAvecAttribution = async (req, res) => {
       order: [["created_at", "DESC"]]
     });
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Liste des numéros récupérée avec succès",
       numeros
@@ -70,6 +70,77 @@ exports.getAllNumerosAvecAttribution = async (req, res) => {
     return res.json({
       success: false,
       message: "Erreur lors de la récupération des numéros"
+    });
+  }
+};
+
+exports.getNumerosAvecRetrait = async (req, res) => {
+  try {
+    const { client_id, multipleAttributions, numero_attribue } = req.query;
+
+    // 1️⃣ Filtre des numéros
+    const whereNumeroAttribue = {};
+    if (numero_attribue) {
+      whereNumeroAttribue.numero_attribue = numero_attribue;
+    }
+
+    // 2️⃣ Filtre des clients
+    const whereClient = {};
+    if (client_id) {
+      whereClient.id = client_id;
+    }
+
+    // 3️⃣ Condition HAVING pour plusieurs attributions
+    let havingCondition = null;
+    if (multipleAttributions === "true") {
+      havingCondition = literal("COUNT(`AttributionNumeros`.`id`) > 1");
+    }
+
+    // 4️⃣ Récupération
+    const numeros = await NumeroAttribue.findAll({
+      where: whereNumeroAttribue,
+      // attributes: [
+      //   "id",
+      //   "numero_attribue",
+      //   [fn("COUNT", col("AttributionNumeros.id")), "total_attributions"]
+      // ],
+      include: [
+        {
+          model: AttributionNumero,
+          // as: "attribution",
+          attributes: ["id", "date_attribution"],
+          include: [
+            {
+              model: AttributionDecision,
+              where: { type_decision: "retrait" },
+              required: true
+            },
+            {
+              model: Client,
+              where: whereClient,
+              required: !!client_id
+            }
+          ],
+          required: true
+        }
+      ],
+      group: ["NumeroAttribue.id"],
+      having: havingCondition || undefined,
+      order: [["numero_attribue", "ASC"]]
+    });
+
+    return res.json({
+      success: true,
+      message:
+        "Liste des numéros ayant fait l'objet d'au moins un retrait récupérée avec succès",
+      numeros
+    });
+  } catch (error) {
+    console.error("Erreur dans getNumerosAvecRetrait:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Erreur lors de la récupération des numéros avec retrait",
+      error: error.message
     });
   }
 };
@@ -91,9 +162,7 @@ exports.libererNumeroAttribue = async (req, res) => {
     numero.statut = "libre";
     await numero.save();
 
-    return res
-      .status(200)
-      .json({ success: true, message: "Numéro libéré avec succès" });
+    return res.json({ success: true, message: "Numéro libéré avec succès" });
   } catch (error) {
     console.error(error);
     return res.json({
@@ -131,7 +200,7 @@ exports.countAssignedInRange = async (req, res) => {
       }
     });
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       assignedCount: count
     });
@@ -283,7 +352,7 @@ exports.countUssdAssignedByDigitAndPrefix = async (req, res) => {
       }
     });
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       assignedCount: count,
       plage: { min, max }

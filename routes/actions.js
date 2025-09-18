@@ -202,7 +202,7 @@ router.get(
 router.post(
   "/clients",
   authenticateToken,
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin", "user"),
   ClientController.createClient
 );
 router.get(
@@ -220,7 +220,7 @@ router.get(
 router.put(
   "/clients/:id",
   authenticateToken,
-  authorizeRole("superadmin", "admin"),
+  authorizeRole("superadmin", "admin", "user"),
   ClientController.updateClient
 );
 router.delete(
@@ -334,6 +334,14 @@ router.put(
   authorizeRole("superadmin", "admin"),
   AttributionNumeroController.reclamerAttribution
 );
+
+router.put(
+  "/attribution/corrigerAttribution/:id",
+  authenticateToken,
+  authorizeRole("superadmin", "admin"),
+  AttributionNumeroController.corrigerAttribution
+);
+
 router.post(
   "/attribution/suspension",
   authenticateToken,
@@ -540,6 +548,12 @@ router.get(
   authenticateToken,
   authorizeRole("superadmin", "admin", "user"),
   controller.getAllNumerosAvecAttribution
+);
+router.get(
+  "/numeros/retraits",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  controller.getNumerosAvecRetrait
 );
 router.get(
   "/numeros/count-in-range",

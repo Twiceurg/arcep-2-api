@@ -71,7 +71,7 @@ module.exports = {
       },
       date_attribution: {
         type: Sequelize.DATE,
-        allowNull: false
+        allowNull: true
       },
       etat_autorisation: {
         type: Sequelize.BOOLEAN,

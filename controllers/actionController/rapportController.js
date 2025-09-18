@@ -57,8 +57,7 @@ class RapportController {
         conclusion
       });
 
-      return res
-        .status(201)
+      return res 
         .json({ success: true, message: "Rapport créé avec succès", rapport });
     } catch (error) {
       console.error("Erreur lors de la création du rapport :", error);
@@ -80,7 +79,7 @@ class RapportController {
           .json({ success: false, message: "Rapport introuvable" });
       }
 
-      return res.status(200).json({ success: true, rapport });
+      return res. json({ success: true, rapport });
     } catch (error) {
       console.error("Erreur lors de la récupération du rapport :", error);
       return res 
@@ -95,7 +94,7 @@ class RapportController {
         include: [{ model: AttributionNumero }]
       });
 
-      return res.status(200).json({ success: true, rapports });
+      return res. json({ success: true, rapports });
     } catch (error) {
       console.error("Erreur lors de la récupération des rapports :", error);
       return res 
@@ -119,7 +118,7 @@ class RapportController {
         where: { attribution_id }
       });
 
-      return res.status(200).json({ success: true, rapports });
+      return res. json({ success: true, rapports });
     } catch (error) {
       console.error("Erreur lors de la récupération des rapports :", error);
       return res 
@@ -141,7 +140,7 @@ class RapportController {
 
       await rapport.update(updatedData);
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Rapport mis à jour avec succès",
         rapport
@@ -166,8 +165,7 @@ class RapportController {
 
       await rapport.destroy();
 
-      return res
-        .status(200)
+      return res 
         .json({ success: true, message: "Rapport supprimé avec succès" });
     } catch (error) {
       console.error("Erreur lors de la suppression du rapport :", error);

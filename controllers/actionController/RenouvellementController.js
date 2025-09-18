@@ -164,7 +164,7 @@ const RenouvellementController = {
         date_expiration_renouvellement: dateExpiration
       });
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Renouvellement effectué avec succès",
         renouvellementDecision,
@@ -183,7 +183,7 @@ const RenouvellementController = {
         include: { model: AttributionNumero } // Inclure l'attribution associée
       });
 
-      return res.status(200).json({ success: true, renouvellements });
+      return res. json({ success: true, renouvellements });
     } catch (error) {
       console.error(error);
       return res 
@@ -205,7 +205,7 @@ const RenouvellementController = {
           .json({ success: false, message: "Renouvellement non trouvé" });
       }
 
-      return res.status(200).json({ success: true, renouvellement });
+      return res. json({ success: true, renouvellement });
     } catch (error) {
       console.error(error);
       return res 
@@ -236,7 +236,7 @@ const RenouvellementController = {
         date_attribution_renouvellement
       });
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Renouvellement mis à jour avec succès",
         renouvellement
@@ -261,7 +261,7 @@ const RenouvellementController = {
 
       await renouvellement.destroy();
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Renouvellement supprimé avec succès"
       });

@@ -46,7 +46,7 @@ class ClientController {
         activite
       });
 
-      return res.status(201).json({
+      return res. json({
         success: true,
         message: "Client créé avec succès",
         client
@@ -67,13 +67,13 @@ class ClientController {
         order: [["created_at", "DESC"]]
       });
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         clients
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res. json({ message: "Erreur interne du serveur" });
     }
   }
 
@@ -89,7 +89,7 @@ class ClientController {
         return res.json({ success: false, message: "Client non trouvé" });
       }
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         client
       });
@@ -137,7 +137,7 @@ class ClientController {
 
       await client.save();
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Client mis à jour avec succès",
         client
@@ -159,8 +159,7 @@ class ClientController {
       }
 
       await client.destroy();
-      return res
-        .status(200)
+      return res 
         .json({ success: true, message: "Client supprimé avec succès" });
     } catch (error) {
       console.error(error);

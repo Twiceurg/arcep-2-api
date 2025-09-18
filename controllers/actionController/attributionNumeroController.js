@@ -41,7 +41,8 @@ class AttributionNumeroController {
         etat_autorisation,
         regle,
         utilisation_id,
-        zone_utilisation_id
+        zone_utilisation_id,
+        utiliter
       } = req.body;
 
       if (
@@ -181,7 +182,8 @@ class AttributionNumeroController {
         regle,
         reference_decision,
         etat_autorisation: false,
-        utilisation_id
+        utilisation_id,
+        utiliter
       });
 
       await attribution.setTypeUtilisations(type_utilisation_id);
@@ -215,7 +217,7 @@ class AttributionNumeroController {
 
       await HistoriqueAttributionNumero.bulkCreate(historiqueEntries);
 
-      return res.status(201).json({
+      return res.json({
         success: true,
         message: "Attribution et numéros créés avec succès",
         attribution
@@ -251,36 +253,37 @@ class AttributionNumeroController {
         whereConditions["service_id"] = serviceId;
       }
 
-      // ➕ Filtre par startDate et endDate
-      if (startStr && endStr) {
-        startDate = new Date(startStr);
-        endDate = new Date(endStr);
-        whereConditions.date_attribution = {
-          [Sequelize.Op.gte]: startDate,
-          [Sequelize.Op.lte]: endDate
-        };
-      } else if (mois && annee) {
-        startDate = new Date(annee, mois - 1, 1);
-        endDate = new Date(annee, mois, 0);
-        whereConditions.date_attribution = {
-          [Sequelize.Op.gte]: startDate,
-          [Sequelize.Op.lte]: endDate
-        };
-      } else if (annee) {
-        startDate = new Date(annee, 0, 1);
-        endDate = new Date(annee, 11, 31);
-        whereConditions.date_attribution = {
-          [Sequelize.Op.gte]: startDate,
-          [Sequelize.Op.lte]: endDate
-        };
-      } else if (mois) {
-        const currentYear = new Date().getFullYear();
-        startDate = new Date(currentYear, mois - 1, 1);
-        endDate = new Date(currentYear, mois, 0);
-        whereConditions.date_attribution = {
-          [Sequelize.Op.gte]: startDate,
-          [Sequelize.Op.lte]: endDate
-        };
+      if (!expirer) {
+        if (startStr && endStr) {
+          startDate = new Date(startStr);
+          endDate = new Date(endStr);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        } else if (mois && annee) {
+          startDate = new Date(annee, mois - 1, 1);
+          endDate = new Date(annee, mois, 0);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        } else if (annee) {
+          startDate = new Date(annee, 0, 1);
+          endDate = new Date(annee, 11, 31);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        } else if (mois) {
+          const currentYear = new Date().getFullYear();
+          startDate = new Date(currentYear, mois - 1, 1);
+          endDate = new Date(currentYear, mois, 0);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        }
       }
 
       const attributions = await AttributionNumero.findAll({
@@ -434,23 +437,79 @@ class AttributionNumeroController {
       const today = new Date();
       today.setHours(0, 0, 0, 0);
 
+      console.log("Valeurs des filtres au départ :", {
+        expirer,
+        mois,
+        annee,
+        today: today.toISOString().split("T")[0]
+      });
+
+      // 1️⃣ Filtre par année/mois sur date_expiration (si définis)
+      if (expirer) {
+        if (mois || annee) {
+          filteredAttributions = filteredAttributions.filter((attr) => {
+            const exp = attr.decision_pertinente?.date_expiration;
+            if (!exp) return false;
+
+            const expDate = new Date(exp);
+            const yearMatch = annee
+              ? expDate.getFullYear() === parseInt(annee)
+              : true;
+            const monthMatch = mois
+              ? expDate.getMonth() === parseInt(mois) - 1
+              : true;
+
+            console.log("Date expiration brute :", exp);
+            console.log(
+              "Date expiration normalisée :",
+              expDate.toISOString().split("T")[0]
+            );
+            console.log(
+              `🔹 Année dans data : ${expDate.getFullYear()} | Match attendu : ${annee} → ${yearMatch}`
+            );
+            console.log(
+              `🔹 Mois dans data : ${
+                expDate.getMonth() + 1
+              } | Match attendu : ${mois || "any"} → ${monthMatch}`
+            );
+
+            return yearMatch && monthMatch;
+          });
+        }
+      }
+
+      // 2️⃣ Filtre sur expirées / encore valides
       if (expirer === "true") {
         filteredAttributions = filteredAttributions.filter((attr) => {
-          const exp = attr.decision_pertinente.date_expiration;
-          if (!exp) return false; // maintenant on est sûr que la décision existe, donc exp doit exister aussi
+          const exp = attr.decision_pertinente?.date_expiration;
+          if (!exp) return false;
+
           const expDate = new Date(exp);
           expDate.setHours(0, 0, 0, 0);
-          return expDate < today;
+          const isExpired = expDate < today;
+
+          console.log(`🔹 Expirer = true → expiré attendu : ${isExpired}`);
+          return isExpired;
         });
       } else if (expirer === "false") {
         filteredAttributions = filteredAttributions.filter((attr) => {
-          const exp = attr.decision_pertinente.date_expiration;
+          const exp = attr.decision_pertinente?.date_expiration;
           if (!exp) return false;
+
           const expDate = new Date(exp);
           expDate.setHours(0, 0, 0, 0);
-          return expDate >= today;
+          const isActive = expDate >= today;
+
+          console.log(`🔹 Expirer = false → actif attendu : ${isActive}`);
+          return isActive;
         });
       }
+
+      console.log(
+        "Nombre d'attributions après filtrage :",
+        filteredAttributions.length
+      );
+
       filteredAttributions.sort((a, b) => {
         const aHasDecision = !!a.decision_pertinente;
         const bHasDecision = !!b.decision_pertinente;
@@ -475,7 +534,7 @@ class AttributionNumeroController {
         return 0;
       });
 
-      return res.status(200).json(filteredAttributions);
+      return res.json(filteredAttributions);
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -638,7 +697,7 @@ class AttributionNumeroController {
         (attr) => attr.Service && attr.Service.Category.id === 1
       );
 
-      // Nouveau filtre pour les expirations
+      // Filtre expiration
       if (expirer === "true") {
         filteredAttributions = filteredAttributions.filter(
           (attr) =>
@@ -653,7 +712,14 @@ class AttributionNumeroController {
         );
       }
 
-      return res.status(200).json(filteredAttributions);
+      // ✅ Trier pour que celles sans décision soient en premier
+      filteredAttributions = filteredAttributions.sort((a, b) => {
+        if (!a.decision_pertinente && b.decision_pertinente) return -1;
+        if (a.decision_pertinente && !b.decision_pertinente) return 1;
+        return new Date(b.date_attribution) - new Date(a.date_attribution);
+      });
+
+      return res.json(filteredAttributions);
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -719,7 +785,10 @@ class AttributionNumeroController {
           { model: AttributionDecision },
           { model: Service, include: [{ model: Category }] },
           { model: TypeUtilisation, through: { attributes: [] } },
-          { model: Pnn, include: [{ model: Utilisation }] },
+          {
+            model: Pnn,
+            include: [{ model: Utilisation }, { model: ZoneUtilisation }]
+          },
           { model: NumeroAttribue }, // ⚠️ Plusieurs numéros possibles
           { model: Rapport }
         ]
@@ -837,7 +906,7 @@ class AttributionNumeroController {
         clients: Object.values(pnnGroup.clients)
       }));
 
-      return res.status(200).json(result);
+      return res.json(result);
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -858,7 +927,7 @@ class AttributionNumeroController {
         ]
       });
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         data: historique
       });
@@ -988,7 +1057,7 @@ class AttributionNumeroController {
         return histoPlain;
       });
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         data: historiques
       });
@@ -1017,6 +1086,7 @@ class AttributionNumeroController {
             model: Pnn,
             include: [{ model: Utilisation }]
           },
+          { model: Utilisation },
           {
             model: NumeroAttribue,
             where: {
@@ -1032,7 +1102,7 @@ class AttributionNumeroController {
         return res.json({ success: false, message: "Attribution non trouvée" });
       }
 
-      return res.status(200).json(attribution);
+      return res.json(attribution);
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -1051,7 +1121,7 @@ class AttributionNumeroController {
         !Array.isArray(type_utilisation_id) ||
         type_utilisation_id.length === 0
       ) {
-        return res.status(400).json({
+        return res.json({
           success: false,
           message:
             "Le champ type_utilisation_id est requis et doit être un tableau non vide"
@@ -1145,12 +1215,6 @@ class AttributionNumeroController {
       req.body.decision_file_url = decisionFileUrl;
       // Appel à assignReference comme demandé
       return await historiqueAttributionController.assignReference(req, res);
-
-      return res.status(200).json({
-        success: true,
-        message: "Attribution mise à jour avec succès",
-        attribution
-      });
     } catch (error) {
       console.error("Erreur dans updateAttribution:", error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -1172,7 +1236,8 @@ class AttributionNumeroController {
         utilisation_id,
         motif,
         reference_decision,
-        dateDebut
+        dateDebut,
+        utiliter
       } = req.body;
 
       const fichierUrl = req.files?.fichier
@@ -1282,6 +1347,7 @@ class AttributionNumeroController {
       attribution.client_id = client_id;
       attribution.regle = regle;
       attribution.utilisation_id = utilisation_id;
+      attribution.utiliter = utiliter;
       await attribution.save();
 
       await attribution.setTypeUtilisations(type_utilisation_id);
@@ -1364,6 +1430,142 @@ class AttributionNumeroController {
     }
   }
 
+  static async corrigerAttribution(req, res) {
+    try {
+      const { id } = req.params;
+      const {
+        type_utilisation_id,
+        service_id,
+        pnn_id,
+        client_id,
+        zone_utilisation_id,
+        numero_attribue,
+        regle,
+        utilisation_id,
+        utiliter,
+         updateNumbers
+      } = req.body;
+
+      const attribution = await AttributionNumero.findByPk(id, {
+        include: [
+          {
+            model: AttributionDecision
+          },
+          {
+            model: Service,
+            include: [Category]
+          }
+        ]
+      });
+
+      if (!attribution) {
+        return res.json({ success: false, message: "Attribution non trouvée" });
+      }
+
+      console.log("type_utilisation_id reçu :", type_utilisation_id);
+
+      if (
+        !type_utilisation_id ||
+        !Array.isArray(type_utilisation_id) ||
+        type_utilisation_id.length === 0
+      ) {
+        return res.json({
+          success: false,
+          message:
+            "Le champ type_utilisation_id est requis et doit être un tableau non vide"
+        });
+      }
+
+      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
+      if (!pnn) {
+        return res.json({ success: false, message: "PNN introuvable" });
+      }
+
+      const numeroAttribueWhere = {
+        numero_attribue: { [Op.in]: numero_attribue }
+      };
+
+      const utilisationId = Number(utilisation_id);
+
+      if (!isNaN(utilisationId)) {
+        if (utilisationId === 15) {
+          numeroAttribueWhere.utilisation_id = 15;
+        } else {
+          numeroAttribueWhere.utilisation_id = { [Op.ne]: 15 };
+        }
+      }
+
+      const existingNumbers = await NumeroAttribue.findAll({
+        where: numeroAttribueWhere
+      });
+
+      // Nums déjà attribués à cette attribution
+      const existingAssignedNumbers = existingNumbers.filter(
+        (num) => num.attribution_id === attribution.id
+      );
+
+      
+
+      // Numéros en conflit (attribués ailleurs)
+      const conflictNumbers = existingNumbers
+        .filter((num) => num.attribution_id !== attribution.id)
+        .map((num) => num.numero_attribue);
+
+      if (conflictNumbers.length > 0) {
+        return res.json({
+          success: false,
+          message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
+            ", "
+          )}`
+        });
+      }
+
+      // Mise à jour de l'attribution
+      attribution.type_utilisation_id = type_utilisation_id;
+      attribution.service_id = service_id;
+      attribution.zone_utilisation_id = zone_utilisation_id || null;
+      attribution.pnn_id = pnn_id || null;
+      attribution.client_id = client_id;
+      attribution.regle = regle;
+      attribution.utilisation_id = utilisation_id;
+      attribution.utiliter = utiliter;
+      await attribution.save();
+
+      await attribution.setTypeUtilisations(type_utilisation_id);
+
+      await AttributionDecision.destroy({
+        where: { attribution_id: attribution.id }
+      });
+
+      await NumeroAttribue.destroy({
+        where: { attribution_id: attribution.id }
+      });
+
+      const numeroAttribueEntries = numero_attribue.map((numero) => ({
+        attribution_id: attribution.id,
+        zone_utilisation_id: zone_utilisation_id || null,
+        utilisation_id,
+        pnn_id: pnn_id || null,
+        numero_attribue: numero,
+        statut: "attribue",
+        created_at: new Date(),
+        updated_at: new Date()
+      }));
+
+      const numeroAttribues = await NumeroAttribue.bulkCreate(
+        numeroAttribueEntries
+      );
+      return res.json({
+        success: true,
+        message: "Attribution corrigée avec succès",
+        numeros: numeroAttribues.map((n) => n.numero_attribue)
+      });
+    } catch (error) {
+      console.error(error);
+      return res.json({ success: false, message: "Erreur interne du serveur" });
+    }
+  }
+
   // 📌 Supprimer une attribution
   static async deleteAttribution(req, res) {
     try {
@@ -1375,9 +1577,7 @@ class AttributionNumeroController {
       }
 
       await attribution.destroy();
-      return res
-        .status(200)
-        .json({ message: "Attribution supprimée avec succès" });
+      return res.json({ message: "Attribution supprimée avec succès" });
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -1396,9 +1596,7 @@ class AttributionNumeroController {
       // Récupérer le PNN pour obtenir son utilisation_id
       const pnn = await Pnn.findByPk(pnn_id);
       if (!pnn) {
-        return res
-          .status(404)
-          .json({ success: false, error: "PNN non trouvé." });
+        return res.json({ success: false, error: "PNN non trouvé." });
       }
       const pnnUtilisationId = pnn.utilisation_id;
 
@@ -1412,7 +1610,7 @@ class AttributionNumeroController {
       });
 
       if (!attributions || attributions.length === 0) {
-        return res.status(200).json([]);
+        return res.json([]);
       }
 
       const attributionIds = attributions.map((attr) => attr.id);
@@ -1430,10 +1628,10 @@ class AttributionNumeroController {
       });
 
       if (!assignedNumbers || assignedNumbers.length === 0) {
-        return res.status(200).json([]);
+        return res.json([]);
       }
 
-      return res.status(200).json(assignedNumbers);
+      return res.json(assignedNumbers);
     } catch (error) {
       console.error(
         "Erreur lors de la récupération des numéros attribués :",
@@ -1508,6 +1706,7 @@ class AttributionNumeroController {
           { model: TypeUtilisation, through: { attributes: [] } },
           { model: Pnn, include: [{ model: Utilisation }] },
           { model: NumeroAttribue },
+          { model: Utilisation },
           { model: AttributionDecision } // récupère toutes les décisions
         ]
       });
@@ -1711,7 +1910,7 @@ class AttributionNumeroController {
       }
 
       // Réponse si l'attribution et la décision ont été bien mises à jour
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Référence assignée et attribution mise à jour avec succès",
         attributionDecision
@@ -1824,7 +2023,7 @@ class AttributionNumeroController {
       });
 
       // Réponse si l'attribution et la décision ont été bien mises à jour
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Référence assignée et reservation effectuer avec succès",
         attributionDecision
@@ -2071,7 +2270,7 @@ class AttributionNumeroController {
       // );
 
       // Répondre avec succès
-      return res.status(200).json({
+      return res.json({
         success: true,
         message:
           "Suspension appliquée avec succès, référence de décision à appliquer ultérieurement.",
@@ -2116,7 +2315,7 @@ class AttributionNumeroController {
         });
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         data: decisions.map((decision) => decision.toJSON())
       });

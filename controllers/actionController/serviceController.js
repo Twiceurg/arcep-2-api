@@ -46,7 +46,7 @@ class ServiceController {
         category_id // Associe le service à la catégorie via `category_id`
       });
 
-      return res.status(201).json({
+      return res. json({
         success: true,
         message: "Service créé avec succès",
         data: service
@@ -71,7 +71,7 @@ class ServiceController {
         ]
       });
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Liste des services récupérée avec succès",
         data: services
@@ -105,7 +105,7 @@ class ServiceController {
         include: [{ model: Category }]
       });
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Services récupérés avec succès",
         data: services
@@ -164,7 +164,7 @@ class ServiceController {
       // Sauvegarder les modifications
       await service.save();
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Service mis à jour avec succès",
         data: service

@@ -338,7 +338,7 @@ class PnnController {
         ]
       });
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         pnns
       });
@@ -360,7 +360,8 @@ class PnnController {
         bloc_min,
         block_max,
         service_id,
-        utilisationId
+        utilisationId,
+        zone_id
       } = req.body;
 
       // Vérifier si le PNN existe
@@ -497,6 +498,7 @@ class PnnController {
 
       pnn.service_id = service_id;
       pnn.utilisation_id = utilisationId;
+      pnn.zone_utilisation_id = zone_id;
 
       await pnn.save();
 
@@ -555,7 +557,7 @@ class PnnController {
       }
 
       await pnn.destroy();
-      return res.status(200).json({ message: "PNN supprimé avec succès" });
+      return res.json({ message: "PNN supprimé avec succès" });
     } catch (error) {
       console.error(error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -581,7 +583,7 @@ class PnnController {
         return res.json({ message: "Aucun PNN trouvé pour ce service" });
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         pnns
       });
@@ -612,7 +614,7 @@ class PnnController {
         });
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         pnns
       });
@@ -642,7 +644,7 @@ class PnnController {
         });
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         pnns
       });
@@ -671,7 +673,7 @@ class PnnController {
         ? "PNN activé avec succès"
         : "PNN désactivé avec succès";
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         message,
         pnn

@@ -9,7 +9,7 @@ const getAllUsers = async (req, res) => {
     // Récupérer tous les utilisateurs
     const users = await Utilisateur.findAll();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Liste des utilisateurs récupérée avec succès.",
       data: users
@@ -122,7 +122,7 @@ const changeUserRole = async (req, res) => {
     // Sauvegarder les modifications
     await utilisateur.save();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: `Rôle de l'utilisateur modifié en ${role}.`,
       data: utilisateur
@@ -152,7 +152,7 @@ const deleteUser = async (req, res) => {
 
     await user.destroy();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Utilisateur supprimé avec succès."
     });
@@ -231,15 +231,13 @@ const resetPassword = async (req, res) => {
     // Sauvegarder les changements
     await utilisateur.save();
 
-    return res
-      .status(200)
-      .json({ message: "Mot de passe réinitialisé avec succès." });
+    return res.json({ message: "Mot de passe réinitialisé avec succès." });
   } catch (error) {
     console.error(
       "Erreur lors de la réinitialisation du mot de passe :",
       error
     );
-    return res.status(500).json({
+    return res.json({
       message: "Erreur serveur lors de la réinitialisation du mot de passe."
     });
   }
@@ -260,7 +258,7 @@ const getUserDetails = async (req, res) => {
       });
     }
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Détails de l'utilisateur récupérés avec succès.",
       data: utilisateur

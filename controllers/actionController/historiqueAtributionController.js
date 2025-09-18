@@ -56,7 +56,7 @@ const historiqueAttributionController = {
         order: [["created_at", "DESC"]]
       });
 
-      return res.status(200).json(historique);
+      return res.json(historique);
     } catch (error) {
       console.error("Erreur lors de la récupération de l'historique :", error);
       return res.json({ success: false, message: "Erreur interne du serveur" });
@@ -424,7 +424,7 @@ const historiqueAttributionController = {
           }
         }
 
-        return res.status(200).json({
+        return res.json({
           success: true,
           message: `${
             decisionType.charAt(0).toUpperCase() + decisionType.slice(1)
@@ -554,7 +554,7 @@ const historiqueAttributionController = {
         });
       }
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Référence assignée et historique mis à jour avec succès",
         attributionDecision

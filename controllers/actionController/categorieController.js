@@ -26,7 +26,7 @@ class CategoriesController {
       // Création du Category
       const newCategory = await Category.create({ nom });
 
-      return res.status(201).json({
+      return res.json({
         success: true,
         message: "Category créé avec succès",
         data: newCategory
@@ -44,7 +44,7 @@ class CategoriesController {
   static async getAllCategorie(req, res) {
     try {
       const Categorys = await Category.findAll();
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Liste des Categorys récupérée avec succès",
         data: Categorys
@@ -86,7 +86,7 @@ class CategoriesController {
       existingCategory.nom = nom;
       await existingCategory.save();
 
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Category mis à jour avec succès",
         data: existingCategory
@@ -114,7 +114,7 @@ class CategoriesController {
       }
 
       await existingCategory.destroy();
-      return res.status(200).json({
+      return res.json({
         success: true,
         message: "Category supprimé avec succès"
       });

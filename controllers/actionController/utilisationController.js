@@ -9,7 +9,7 @@ class UtilisationController {
       // Vérifier si le service existe
       const service = await Service.findByPk(service_id);
       if (!service) {
-        return res.status(400).json({ message: "Service not found" });
+        return res. json({ message: "Service not found" });
       }
 
       // Récupérer l'ID de la catégorie depuis le service
@@ -22,7 +22,7 @@ class UtilisationController {
         category_id
       });
 
-      return res.status(201).json({
+      return res. json({
         message: "Utilisation created successfully!",
         success: true,
         data: utilisation
@@ -52,7 +52,7 @@ class UtilisationController {
         });
       }
 
-      return res.status(200).json({
+      return res. json({
         message: "Utilisations by service retrieved successfully!",
         success: true,
         data: utilisations
@@ -73,7 +73,7 @@ class UtilisationController {
         include: [{ model: Service }]
       });
 
-      return res.status(200).json({
+      return res. json({
         message: "All utilisations retrieved successfully!",
         success: true,
         data: utilisations
@@ -105,7 +105,7 @@ class UtilisationController {
         });
       }
 
-      return res.status(200).json({
+      return res. json({
         message: "Utilisation retrieved successfully!",
         success: true,
         data: utilisation
@@ -143,7 +143,7 @@ class UtilisationController {
       utilisation.category_id = service.category_id;
 
       await utilisation.save();
-      return res.status(200).json({
+      return res. json({
         message: "Utilisation updated successfully!",
         success: true,
         data: utilisation

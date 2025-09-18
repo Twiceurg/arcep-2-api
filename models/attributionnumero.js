@@ -47,7 +47,6 @@ module.exports = (sequelize, DataTypes) => {
   }
   AttributionNumero.init(
     {
- 
       service_id: {
         type: DataTypes.INTEGER,
         allowNull: true
@@ -69,12 +68,16 @@ module.exports = (sequelize, DataTypes) => {
           key: "id"
         }
       },
- 
- 
+
       regle: {
         type: DataTypes.STRING,
         allowNull: true
       },
+      utiliter: {
+        type: DataTypes.STRING,
+        allowNull: true
+      },
+
       date_attribution: {
         type: DataTypes.DATE,
         allowNull: true

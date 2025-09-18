@@ -46,7 +46,7 @@ class TypeUtilisationController {
         type: "type_utilisation_creation"
       });
 
-      return res.status(201).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation créé avec succès",
         typeUtilisation
@@ -64,7 +64,7 @@ class TypeUtilisationController {
   static async getAllTypesUtilisation(req, res) {
     try {
       const types = await TypeUtilisation.findAll();
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Types d'utilisation récupérés avec succès",
         types
@@ -86,7 +86,7 @@ class TypeUtilisationController {
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation récupéré avec succès",
         type
@@ -111,7 +111,7 @@ class TypeUtilisationController {
       typeUtilisation.libele_type = libele_type;
       await typeUtilisation.save();
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation mis à jour avec succès",
         typeUtilisation
@@ -135,7 +135,7 @@ class TypeUtilisationController {
       }
 
       await typeUtilisation.destroy();
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation supprimé avec succès"
       });
