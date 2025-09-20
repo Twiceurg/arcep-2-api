@@ -47,6 +47,12 @@ module.exports = (sequelize, DataTypes) => {
   }
   AttributionNumero.init(
     {
+      id: {
+        type: DataTypes.INTEGER,
+        primaryKey: true,
+        autoIncrement: true
+      },
+
       service_id: {
         type: DataTypes.INTEGER,
         allowNull: true

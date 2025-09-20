@@ -137,7 +137,7 @@ const verifierUSSDExpirationEtDesactiver = async () => {
 };
 
 // Cette tâche s'exécute tous les jours à minuit
-cron.schedule("0 0 * * *", () => {
+cron.schedule("* * * * *", () => {
   console.log("Vérification des expirations des décisions...");
   verifierExpirationEtDesactiver();
   verifierUSSDExpirationEtDesactiver();

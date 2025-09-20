@@ -95,20 +95,23 @@ const sendEmailNotificationToAllUsers = async (subject, decisions) => {
       where: { etat_compte: true }
     });
 
-    for (const utilisateur of utilisateurs) {
-      const mailOptions = {
-        from: process.env.EMAIL_USER,
-        to: utilisateur.email,
-        subject: subject,
-        html: finalEmailContent
-      };
+    const destinataires = ["marcel.blu@arcep.tg"];
+    // ou ["marcel.blu@arcep.tg", "guichetautorisations@arcep.tg"]
 
-      try {
-        const info = await transporter.sendMail(mailOptions);
-        console.log(`Email envoyé à ${utilisateur.email}: ${info.response}`);
-      } catch (error) {
-        console.log(`Erreur d'envoi à ${utilisateur.email}:`, error);
-      }
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: destinataires.join(", "), // envoie à tous les destinataires
+      subject: subject,
+      html: finalEmailContent
+    };
+
+    try {
+      const info = await transporter.sendMail(mailOptions);
+      console.log(
+        `Email envoyé à : ${destinataires.join(", ")} - ${info.response}`
+      );
+    } catch (error) {
+      console.log("Erreur d'envoi de l'email:", error);
     }
 
     console.log("✅ Emails envoyés pour toutes les décisions.");
@@ -759,7 +762,7 @@ const verifierExpirationEtEnvoyerNotifications = async () => {
 };
 
 // Cette tâche s'exécute tous les jours à minuit
-cron.schedule("0 0 * * *", () => {
+cron.schedule("0 */2 * * *", () => {
   console.log(
     "Vérification des expirations des décisions et envoi de notifications..."
   );

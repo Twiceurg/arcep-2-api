@@ -1708,7 +1708,8 @@ const getHistoriqueSVA = async (req, res) => {
         [fn("COUNT", col("NumeroAttribue.id")), "total_attributions"]
       ],
       where: {
-        statut: { [Op.ne]: "libre" }
+        statut: { [Op.ne]: "libre" },
+        date_attribution: { [Op.ne]: null } // ❌ Ignore ceux qui n'ont pas de date
       },
       include: [
         {

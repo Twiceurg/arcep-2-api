@@ -1443,18 +1443,17 @@ class AttributionNumeroController {
         regle,
         utilisation_id,
         utiliter,
-         updateNumbers
+        updateNumbers // envoyé depuis le frontend
       } = req.body;
+
+      // Conversion en booléen
+      const updateNumbersBool =
+        updateNumbers === true || updateNumbers === "true";
 
       const attribution = await AttributionNumero.findByPk(id, {
         include: [
-          {
-            model: AttributionDecision
-          },
-          {
-            model: Service,
-            include: [Category]
-          }
+          { model: AttributionDecision },
+          { model: Service, include: [Category] }
         ]
       });
 
@@ -1462,103 +1461,116 @@ class AttributionNumeroController {
         return res.json({ success: false, message: "Attribution non trouvée" });
       }
 
-      console.log("type_utilisation_id reçu :", type_utilisation_id);
-
+      // === Mise à jour seulement des champs renseignés ===
       if (
-        !type_utilisation_id ||
-        !Array.isArray(type_utilisation_id) ||
-        type_utilisation_id.length === 0
+        type_utilisation_id !== undefined &&
+        type_utilisation_id !== null &&
+        type_utilisation_id !== ""
       ) {
-        return res.json({
-          success: false,
-          message:
-            "Le champ type_utilisation_id est requis et doit être un tableau non vide"
+        attribution.type_utilisation_id = type_utilisation_id;
+        await attribution.setTypeUtilisations(type_utilisation_id);
+      }
+
+      if (client_id !== undefined && client_id !== null && client_id !== "") {
+        attribution.client_id = client_id;
+      }
+
+      if (utiliter !== undefined && utiliter !== null && utiliter !== "") {
+        attribution.utiliter = utiliter;
+      }
+
+      await attribution.save();
+
+      // === Si updateNumbers === true, on met à jour les numéros ===
+      if (updateNumbersBool) {
+        if (
+          service_id !== undefined &&
+          service_id !== null &&
+          service_id !== ""
+        ) {
+          attribution.service_id = service_id;
+        }
+
+        if (zone_utilisation_id !== undefined && zone_utilisation_id !== "") {
+          attribution.zone_utilisation_id = zone_utilisation_id;
+        }
+
+        if (pnn_id !== undefined && pnn_id !== "") {
+          attribution.pnn_id = pnn_id;
+        }
+
+        if (regle !== undefined && regle !== null && regle !== "") {
+          attribution.regle = regle;
+        }
+
+        if (
+          utilisation_id !== undefined &&
+          utilisation_id !== null &&
+          utilisation_id !== ""
+        ) {
+          attribution.utilisation_id = utilisation_id;
+        }
+
+        await attribution.save();
+
+        // Supprimer anciennes décisions et numéros
+        await AttributionDecision.destroy({
+          where: { attribution_id: attribution.id }
         });
-      }
 
-      const pnn = await Pnn.findOne({ where: { id: pnn_id } });
-      if (!pnn) {
-        return res.json({ success: false, message: "PNN introuvable" });
-      }
+        await NumeroAttribue.destroy({
+          where: { attribution_id: attribution.id }
+        });
 
-      const numeroAttribueWhere = {
-        numero_attribue: { [Op.in]: numero_attribue }
-      };
+        // Vérification des conflits uniquement si des numéros sont fournis
+        if (Array.isArray(numero_attribue) && numero_attribue.length > 0) {
+          const numeroAttribueWhere = {
+            numero_attribue: { [Op.in]: numero_attribue }
+          };
 
-      const utilisationId = Number(utilisation_id);
+          const utilisationIdNum = Number(utilisation_id);
+          if (!isNaN(utilisationIdNum)) {
+            numeroAttribueWhere.utilisation_id =
+              utilisationIdNum === 15 ? 15 : { [Op.ne]: 15 };
+          }
 
-      if (!isNaN(utilisationId)) {
-        if (utilisationId === 15) {
-          numeroAttribueWhere.utilisation_id = 15;
-        } else {
-          numeroAttribueWhere.utilisation_id = { [Op.ne]: 15 };
+          const existingNumbers = await NumeroAttribue.findAll({
+            where: numeroAttribueWhere
+          });
+
+          const conflictNumbers = existingNumbers
+            .filter((num) => num.attribution_id !== attribution.id)
+            .map((num) => num.numero_attribue);
+
+          if (conflictNumbers.length > 0) {
+            return res.json({
+              success: false,
+              message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
+                ", "
+              )}`
+            });
+          }
+
+          // Création des nouveaux numéros
+          const numeroAttribueEntries = numero_attribue.map((numero) => ({
+            attribution_id: attribution.id,
+            zone_utilisation_id: zone_utilisation_id || null,
+            utilisation_id,
+            pnn_id: pnn_id || null,
+            numero_attribue: numero,
+            statut: "attribue",
+            created_at: new Date(),
+            updated_at: new Date()
+          }));
+
+          await NumeroAttribue.bulkCreate(numeroAttribueEntries);
         }
       }
 
-      const existingNumbers = await NumeroAttribue.findAll({
-        where: numeroAttribueWhere
-      });
-
-      // Nums déjà attribués à cette attribution
-      const existingAssignedNumbers = existingNumbers.filter(
-        (num) => num.attribution_id === attribution.id
-      );
-
-      
-
-      // Numéros en conflit (attribués ailleurs)
-      const conflictNumbers = existingNumbers
-        .filter((num) => num.attribution_id !== attribution.id)
-        .map((num) => num.numero_attribue);
-
-      if (conflictNumbers.length > 0) {
-        return res.json({
-          success: false,
-          message: `Les numéros suivants sont déjà attribués à une autre attribution: ${conflictNumbers.join(
-            ", "
-          )}`
-        });
-      }
-
-      // Mise à jour de l'attribution
-      attribution.type_utilisation_id = type_utilisation_id;
-      attribution.service_id = service_id;
-      attribution.zone_utilisation_id = zone_utilisation_id || null;
-      attribution.pnn_id = pnn_id || null;
-      attribution.client_id = client_id;
-      attribution.regle = regle;
-      attribution.utilisation_id = utilisation_id;
-      attribution.utiliter = utiliter;
-      await attribution.save();
-
-      await attribution.setTypeUtilisations(type_utilisation_id);
-
-      await AttributionDecision.destroy({
-        where: { attribution_id: attribution.id }
-      });
-
-      await NumeroAttribue.destroy({
-        where: { attribution_id: attribution.id }
-      });
-
-      const numeroAttribueEntries = numero_attribue.map((numero) => ({
-        attribution_id: attribution.id,
-        zone_utilisation_id: zone_utilisation_id || null,
-        utilisation_id,
-        pnn_id: pnn_id || null,
-        numero_attribue: numero,
-        statut: "attribue",
-        created_at: new Date(),
-        updated_at: new Date()
-      }));
-
-      const numeroAttribues = await NumeroAttribue.bulkCreate(
-        numeroAttribueEntries
-      );
       return res.json({
         success: true,
         message: "Attribution corrigée avec succès",
-        numeros: numeroAttribues.map((n) => n.numero_attribue)
+        numeros: updateNumbersBool ? numero_attribue : undefined
       });
     } catch (error) {
       console.error(error);
@@ -1782,8 +1794,12 @@ class AttributionNumeroController {
   static async assignReference(req, res) {
     try {
       const { id } = req.params;
-      const { reference_decision, date_attribution, duree_utilisation } =
-        req.body;
+      const {
+        reference_decision,
+        date_attribution,
+        duree_utilisation,
+        utiliter
+      } = req.body;
       const file = req.file;
 
       // Vérifier si l'attribution existe avec son service
@@ -1865,6 +1881,11 @@ class AttributionNumeroController {
         // Calcul de la date d'expiration
         dateExpiration = new Date(attributionDate);
         dateExpiration.setMonth(dateExpiration.getMonth() + dureeEnMois);
+      }
+
+      if (utiliter) {
+        attribution.utiliter = utiliter;
+        await attribution.save();
       }
 
       // Mise à jour de la date d'attribution pour l'attribution principale si catégorie est 1

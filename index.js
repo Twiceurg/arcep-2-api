@@ -31,7 +31,7 @@ const io = socketIo(server, {
 
 // const io = socketIo(server, {
 //   cors: {
-//     origin: ["http://10.1.25.6:3000"],
+//     origin: ["http://10.1.25.6:3000", "http://gestion-pnn.interne.arcep.tg"],
 //     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
 //     allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
 //     credentials: true
