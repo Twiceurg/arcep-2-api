@@ -229,7 +229,7 @@ class AttributionNumeroController {
   }
 
   // 📌 Récupérer toutes les attributions
-  static async getAllAttributions(req, res) {
+  static async getAttributions(req, res) {
     try {
       const {
         utilisationId,
@@ -427,6 +427,319 @@ class AttributionNumeroController {
       filteredAttributions = filteredAttributions.filter(
         (attr) => attr.Service && attr.Service.Category.id !== 1
       );
+
+      if (renouveler === "true") {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) => attr.decision_pertinente?.type_decision === "renouvellement"
+        );
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      console.log("Valeurs des filtres au départ :", {
+        expirer,
+        mois,
+        annee,
+        today: today.toISOString().split("T")[0]
+      });
+
+      // 1️⃣ Filtre par année/mois sur date_expiration (si définis)
+      if (expirer) {
+        if (mois || annee) {
+          filteredAttributions = filteredAttributions.filter((attr) => {
+            const exp = attr.decision_pertinente?.date_expiration;
+            if (!exp) return false;
+
+            const expDate = new Date(exp);
+            const yearMatch = annee
+              ? expDate.getFullYear() === parseInt(annee)
+              : true;
+            const monthMatch = mois
+              ? expDate.getMonth() === parseInt(mois) - 1
+              : true;
+
+            console.log("Date expiration brute :", exp);
+            console.log(
+              "Date expiration normalisée :",
+              expDate.toISOString().split("T")[0]
+            );
+            console.log(
+              `🔹 Année dans data : ${expDate.getFullYear()} | Match attendu : ${annee} → ${yearMatch}`
+            );
+            console.log(
+              `🔹 Mois dans data : ${
+                expDate.getMonth() + 1
+              } | Match attendu : ${mois || "any"} → ${monthMatch}`
+            );
+
+            return yearMatch && monthMatch;
+          });
+        }
+      }
+
+      // 2️⃣ Filtre sur expirées / encore valides
+      if (expirer === "true") {
+        filteredAttributions = filteredAttributions.filter((attr) => {
+          const exp = attr.decision_pertinente?.date_expiration;
+          if (!exp) return false;
+
+          const expDate = new Date(exp);
+          expDate.setHours(0, 0, 0, 0);
+          const isExpired = expDate < today;
+
+          console.log(`🔹 Expirer = true → expiré attendu : ${isExpired}`);
+          return isExpired;
+        });
+      } else if (expirer === "false") {
+        filteredAttributions = filteredAttributions.filter((attr) => {
+          const exp = attr.decision_pertinente?.date_expiration;
+          if (!exp) return false;
+
+          const expDate = new Date(exp);
+          expDate.setHours(0, 0, 0, 0);
+          const isActive = expDate >= today;
+
+          console.log(`🔹 Expirer = false → actif attendu : ${isActive}`);
+          return isActive;
+        });
+      }
+
+      console.log(
+        "Nombre d'attributions après filtrage :",
+        filteredAttributions.length
+      );
+
+      filteredAttributions.sort((a, b) => {
+        const aHasDecision = !!a.decision_pertinente;
+        const bHasDecision = !!b.decision_pertinente;
+
+        // Priorité : d'abord celles sans décision
+        if (!aHasDecision && bHasDecision) return -1;
+        if (aHasDecision && !bHasDecision) return 1;
+
+        // Si les deux n'ont pas de décision, trier par created_at (de l'attribution)
+        if (!aHasDecision && !bHasDecision) {
+          return new Date(b.created_at) - new Date(a.created_at);
+        }
+
+        // Si les deux ont une décision, trier par created_at de la décision
+        if (aHasDecision && bHasDecision) {
+          return (
+            new Date(b.decision_pertinente.created_at) -
+            new Date(a.decision_pertinente.created_at)
+          );
+        }
+
+        return 0;
+      });
+
+      return res.json(filteredAttributions);
+    } catch (error) {
+      console.error(error);
+      return res.json({ success: false, message: "Erreur interne du serveur" });
+    }
+  }
+
+
+  static async getAllAttributions(req, res) {
+    try {
+      const {
+        utilisationId,
+        serviceId,
+        renouveler,
+        expirer,
+        mois,
+        annee,
+        startDate: startStr,
+        endDate: endStr
+      } = req.query;
+
+      const whereConditions = {};
+      let startDate, endDate;
+
+      if (utilisationId) {
+        whereConditions.utilisation_id = utilisationId;
+      }
+
+      if (serviceId) {
+        whereConditions["service_id"] = serviceId;
+      }
+
+      if (!expirer) {
+        if (startStr && endStr) {
+          startDate = new Date(startStr);
+          endDate = new Date(endStr);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        } else if (mois && annee) {
+          startDate = new Date(annee, mois - 1, 1);
+          endDate = new Date(annee, mois, 0);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        } else if (annee) {
+          startDate = new Date(annee, 0, 1);
+          endDate = new Date(annee, 11, 31);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        } else if (mois) {
+          const currentYear = new Date().getFullYear();
+          startDate = new Date(currentYear, mois - 1, 1);
+          endDate = new Date(currentYear, mois, 0);
+          whereConditions.date_attribution = {
+            [Sequelize.Op.gte]: startDate,
+            [Sequelize.Op.lte]: endDate
+          };
+        }
+      }
+
+      const attributions = await AttributionNumero.findAll({
+        where: whereConditions,
+        order: [["date_attribution", "DESC"]],
+        include: [
+          { model: Client },
+          { model: Utilisation },
+          { model: ZoneUtilisation },
+          {
+            model: AttributionDecision,
+
+            order: [["date_attribution", "DESC"]]
+          },
+          {
+            model: Service,
+            include: [{ model: Category }]
+          },
+          {
+            model: TypeUtilisation,
+            through: { attributes: [] }
+          },
+          {
+            model: Pnn,
+            include: [{ model: Utilisation }]
+          },
+          {
+            model: NumeroAttribue
+            // where: {
+            //   statut: {
+            //     [Op.notIn]: ["Retiré", "Résiliation"]
+            //   }
+            // }
+          },
+          { model: Rapport }
+        ]
+      });
+
+      // 🔁 Fonction métier pour trouver la décision pertinente
+      const getDecisionPertinente = (decisions) => {
+        if (!decisions || decisions.length === 0) return null;
+
+        // Trier les décisions par date de création décroissante
+        const sorted = [...decisions].sort(
+          (a, b) => new Date(b.created_at) - new Date(a.created_at)
+        );
+
+        // 1. Résiliation (si présente)
+        const resiliation = sorted.find(
+          (d) => d.type_decision === "résiliation"
+        );
+        if (resiliation) return resiliation;
+
+        // 2. Retrait
+        const retrait = sorted.find((d) => d.type_decision === "retrait");
+        if (retrait) return retrait;
+
+        // 3. Suspension active
+        const suspension = sorted.find((d) => d.type_decision === "suspension");
+        if (
+          suspension?.date_expiration &&
+          new Date() < new Date(suspension.date_expiration)
+        ) {
+          return suspension;
+        }
+
+        // 4. La plus récente entre modification et réclamation
+        const modifOrRecla = sorted.find(
+          (d) =>
+            d.type_decision === "modification" ||
+            d.type_decision === "reclamation"
+        );
+        if (modifOrRecla) return modifOrRecla;
+
+        // 5. Renouvellement
+        const renouvellement = sorted.find(
+          (d) => d.type_decision === "renouvellement"
+        );
+        if (renouvellement) return renouvellement;
+
+        // 6. Attribution (par défaut)
+        return (
+          sorted.find((d) => d.type_decision === "attribution") || sorted[0]
+        );
+      };
+
+      // ➕ Ajout de la décision pertinente à chaque attribution
+      let filteredAttributions = attributions.map((attr) => {
+        const attrPlain = attr.get({ plain: true });
+        const decisionPertinente = getDecisionPertinente(
+          attrPlain.AttributionDecisions
+        );
+
+        return {
+          ...attrPlain,
+          decision_pertinente: decisionPertinente
+        };
+      });
+      const filtrageDecision =
+        renouveler === "true" ||
+        renouveler === "false" ||
+        expirer === "true" ||
+        expirer === "false";
+
+      if (filtrageDecision) {
+        filteredAttributions = filteredAttributions.filter(
+          (attr) => attr.decision_pertinente
+        );
+      }
+
+      // // Ensuite, seulement lors du filtrage :
+      // filteredAttributions = filteredAttributions.filter(
+      //   (attr) => attr.decision_pertinente // ici on filtre les `null`
+      // );
+
+      if (serviceId) {
+        const idService = parseInt(serviceId);
+        filteredAttributions = filteredAttributions.filter(
+          (attr) => attr.Service && attr.Service.id === idService
+        );
+      }
+
+      if (utilisationId) {
+        const idUtilisation = parseInt(utilisationId);
+        console.log("Filtrage uniquement par Utilisation.id =", idUtilisation);
+
+        filteredAttributions.forEach((attr, index) => {
+          console.log(
+            `Attribution #${index}`,
+            "Utilisation.id =",
+            attr.Utilisation?.id
+          );
+        });
+
+        filteredAttributions = filteredAttributions.filter((attr) => {
+          // On filtre sur Utilisation.id seulement, sans tenir compte de la décision pertinente
+          return attr.Utilisation?.id === idUtilisation;
+        });
+      }
+
+      // filteredAttributions = filteredAttributions.filter(
+      //   (attr) => attr.Service && attr.Service.Category.id !== 1
+      // );
 
       if (renouveler === "true") {
         filteredAttributions = filteredAttributions.filter(

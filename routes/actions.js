@@ -270,6 +270,12 @@ router.post(
   AttributionNumeroController.createAttribution
 );
 router.get(
+  "/attribution/all",
+  authenticateToken,
+  authorizeRole("superadmin", "admin", "user"),
+  AttributionNumeroController.getAllAttributions
+);
+router.get(
   "/attribution/bloc",
   authenticateToken,
   authorizeRole("superadmin", "admin", "user"),
@@ -285,7 +291,7 @@ router.get(
   "/attribution",
   authenticateToken,
   authorizeRole("superadmin", "admin", "user"),
-  AttributionNumeroController.getAllAttributions
+  AttributionNumeroController.getAttributions
 );
 router.get(
   "/attribution/:id",

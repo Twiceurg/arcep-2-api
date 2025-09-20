@@ -80,7 +80,7 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: true
       },
       utiliter: {
-        type: DataTypes.STRING,
+        type: DataTypes.TEXT,
         allowNull: true
       },
 
