@@ -5,6 +5,8 @@ const {
   AttributionNumero,
   USSDAttribution,
   Client,
+  Service,
+  Category,
   Pnn,
   Utilisation,
   USSD
@@ -14,77 +16,84 @@ const {
  * Vérifie si les numéros sont disponibles, déjà attribués ou hors plage.
  */
 async function checkNumeroDisponibilite(req, res) {
-  const { numeros } = req.body;
+  const { numeros, serviceId, utilisationId, zoneId } = req.body;
 
   console.log("Numéros reçus pour vérification :", numeros);
+  console.log("Filtres :", { serviceId, utilisationId, zoneId });
 
   if (!Array.isArray(numeros) || numeros.length === 0) {
     return res.json({
       success: false,
-      message: "Le tableau des numéros est requis et doit être non vide."
+      message: "numéros est requis et doit être non vide."
     });
   }
 
   try {
-    // Récupérer les conflits d'attribution PNN
+    const allUtilisations = await Utilisation.findAll();
+    const utilisationsMap = {};
+    allUtilisations.forEach((u) => {
+      utilisationsMap[u.id] = u.nom;
+    });
+
+    const pnnFilter = { etat: true };
+    if (serviceId) pnnFilter.service_id = serviceId;
+    if (utilisationId) pnnFilter.utilisation_id = utilisationId;
+    if (zoneId) pnnFilter.zone_utilisation_id = zoneId;
+
+    const numeroFilter = {
+      numero_attribue: { [Op.in]: numeros },
+      statut: { [Op.ne]: "libre" }
+    };
+
     const numeroConflicts = await NumeroAttribue.findAll({
-      where: {
-        numero_attribue: { [Op.in]: numeros },
-        statut: { [Op.ne]: "libre" }
-      },
+      where: numeroFilter,
       include: [
-        { model: AttributionNumero, include: [Client] },
-        { model: Pnn, include: [Utilisation] }
+        {
+          model: AttributionNumero,
+          include: [Client, { model: Service, include: [Category] }]
+        },
+        {
+          model: Pnn,
+          where: pnnFilter,
+          required: false,
+          include: [Utilisation, { model: Service, include: [Category] }]
+        }
       ]
     });
 
-    // Récupérer les conflits d'attribution USSD
-    const ussdConflicts = await UssdAttribuer.findAll({
-      where: {
-        ussd_attribue: { [Op.in]: numeros },
-        statut: { [Op.ne]: "libre" }
-      },
-      include: [
-        { model: USSDAttribution, include: [Client] },
-        { model: USSD, include: [Utilisation] }
-      ]
-    });
-
-    // Récupère tous les blocs valides avec utilisation
     const activePnns = await Pnn.findAll({
-      where: { etat: true },
-      include: [Utilisation]
-    });
-
-    const activeUssds = await USSD.findAll({
-      where: { etat: true },
-      include: [Utilisation]
+      where: pnnFilter,
+      include: [Utilisation, { model: Service, include: [Category] }]
     });
 
     const conflicts = [];
     const availableNumeros = [];
     const outOfRangeNumeros = [];
 
-    // Conflits
+    // Conflits détaillés
     for (const entry of numeroConflicts) {
-      const clientName =
-        entry.AttributionNumero?.Client?.denomination || "client inconnu";
-      const utilisationName =
-        entry.Pnn?.Utilisation?.nom || "Utilisation inconnue";
+      const clientName = (
+        entry.AttributionNumero?.Client?.denomination || "client inconnu"
+      ).toUpperCase();
+
+      let utilisationName = "Utilisation inconnue";
+      if (entry.utilisation_id && utilisationsMap[entry.utilisation_id]) {
+        utilisationName = utilisationsMap[entry.utilisation_id];
+      } else if (entry.Pnn?.Utilisation?.nom) {
+        utilisationName = entry.Pnn.Utilisation.nom;
+      }
+
+      const dateAttribution = entry.AttributionNumero?.date_attribution
+        ? new Date(entry.AttributionNumero.date_attribution).toLocaleDateString(
+            "fr-FR"
+          )
+        : "Date inconnue";
+
+      const categoryId = entry.AttributionNumero?.Service?.Category?.id;
+      const messagePrefix = categoryId === 1 ? "Le bloc" : "Le numéro";
 
       conflicts.push(
-        `Le numéro ${entry.numero_attribue} a déjà été attribué à ${clientName} (${utilisationName})`
-      );
-    }
-
-    for (const entry of ussdConflicts) {
-      const clientName =
-        entry.USSDAttribution?.Client?.denomination || "client inconnu";
-      const utilisationName =
-        entry.USSD?.Utilisation?.nom || "Utilisation inconnue";
-
-      conflicts.push(
-        `Le numéro ${entry.ussd_attribue} a déjà été attribué en USSD à ${clientName} (${utilisationName})`
+        `${messagePrefix} ${entry.numero_attribue} est déjà attribué pour ${clientName} (${utilisationName})`
       );
     }
 
@@ -100,38 +109,99 @@ async function checkNumeroDisponibilite(req, res) {
         continue;
       }
 
-      const isConflict =
-        numeroConflicts.some(
-          (entry) => String(entry.numero_attribue) === numeroStr
-        ) ||
-        ussdConflicts.some(
-          (entry) => String(entry.ussd_attribue) === numeroStr
-        );
+      // Vérifier d'abord le conflit
+      const isConflict = numeroConflicts.some(
+        (entry) => String(entry.numero_attribue) === numeroStr
+      );
+      if (isConflict) {
+        const clientName = (
+          numeroConflicts.find((e) => String(e.numero_attribue) === numeroStr)
+            ?.AttributionNumero?.Client?.denomination || "client inconnu"
+        ).toUpperCase();
+        // conflicts.push(
+        //   `Le numéro ${numeroStr} a déjà été attribué à ${clientName}.`
+        // );
+        continue; // passe au numéro suivant
+      }
 
+      // Gestion USSD si utilisationId = 15
+      if (parseInt(utilisationId) === 15) {
+        const isUSSD = /^\d{3,4}$/.test(numeroStr);
+        if (!isUSSD) {
+          outOfRangeNumeros.push(
+            `Le numéro ${numeroStr} n'est pas un code USSD valide (3 ou 4 chiffres).`
+          );
+          continue;
+        }
+
+        availableNumeros.push(
+          `Le code ${numeroStr} est disponible pour le service USSD.`
+        );
+        continue;
+      }
+
+      // Vérification normale des blocs PNN
       const matchedPnn = activePnns.find(
         (pnn) => numeroInt >= pnn.bloc_min && numeroInt <= pnn.block_max
       );
 
-      const matchedUssd = activeUssds.find(
-        (ussd) => numeroInt >= ussd.bloc_min && numeroInt <= ussd.bloc_max
+      if (!matchedPnn) {
+        const serviceChoisi =
+          activePnns.length > 0 ? activePnns[0].Service?.nom : null;
+
+        const filtreChoisi = serviceId || utilisationId;
+
+        if (filtreChoisi && serviceChoisi) {
+          // Cas filtre choisi → message hors plage + plages
+          const plages = activePnns
+            .map((pnn) => ({ min: pnn.bloc_min, max: pnn.block_max }))
+            .sort((a, b) => a.min - b.min);
+
+          let message = `Le numéro ${numero} est hors plage pour les ${serviceChoisi}.\n`;
+
+          if (plages.length > 0) {
+            message += "Pour ce service, les plages valides sont :\n";
+            for (let i = 0; i < plages.length; i += 2) {
+              const first = plages[i];
+              const second = plages[i + 1];
+              if (second) {
+                message += `- ${first.min} → ${first.max}     |     ${second.min} → ${second.max}\n`;
+              } else {
+                message += `- ${first.min} → ${first.max}\n`;
+              }
+            }
+          } else {
+            message += "Aucune plage valide n'est définie pour ce service.";
+          }
+
+          outOfRangeNumeros.push(message.trim());
+          continue;
+        } else {
+          // Aucun filtre choisi → vérifier si c'est un code USSD
+          const isUSSD = /^\d{3,4}$/.test(numeroStr);
+
+          if (!isUSSD) {
+            outOfRangeNumeros.push(`Le numéro ${numeroStr} est hors plage.`);
+          } else {
+            availableNumeros.push(
+              `Le code ${numeroStr} est disponible pour le service USSD.`
+            );
+          }
+          continue;
+        }
+      }
+
+      const categoryId = matchedPnn.Service?.Category?.id;
+      const messagePrefix = categoryId === 1 ? "Le bloc" : "Le numéro";
+
+      const utilisationNom =
+        matchedPnn.Utilisation?.nom ||
+        utilisationsMap[matchedPnn.utilisation_id] ||
+        "Utilisation inconnue";
+
+      availableNumeros.push(
+        `${messagePrefix} ${numero} est disponible. (${utilisationNom})`
       );
-
-      if (!isConflict && (matchedPnn || matchedUssd)) {
-        const utilisationName =
-          matchedPnn?.Utilisation?.nom ||
-          matchedUssd?.Utilisation?.nom ||
-          "Utilisation inconnue";
-
-        availableNumeros.push(
-          `Le numéro ${numero} est disponible. (${utilisationName})`
-        );
-      }
-
-      if (!matchedPnn && !matchedUssd) {
-        outOfRangeNumeros.push(
-          `Le numéro ${numero} ne fait pas partie d’un bloc PNN ou USSD valide.`
-        );
-      }
     }
 
     return res.json({

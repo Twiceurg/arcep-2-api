@@ -15,6 +15,13 @@ module.exports = (sequelize, DataTypes) => {
       AttributionDecision.hasMany(models.Renouvellement, {
         foreignKey: "decision_id"
       });
+
+      AttributionDecision.belongsToMany(models.NumeroAttribue, {
+        through: models.DecisionNumero,
+        foreignKey: "decision_id",
+        otherKey: "numero_attribue_id",
+        as: "numeros"
+      });
     }
   }
   AttributionDecision.init(
@@ -58,6 +65,22 @@ module.exports = (sequelize, DataTypes) => {
         allowNull: false
       },
       notification_envoyee: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_1mois: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_1semaine: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_jour_j: {
+        type: DataTypes.BOOLEAN,
+        defaultValue: false
+      },
+      notification_envoyee_1semaine_apres: {
         type: DataTypes.BOOLEAN,
         defaultValue: false
       },

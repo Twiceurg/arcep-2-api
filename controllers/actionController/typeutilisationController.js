@@ -8,7 +8,7 @@ class TypeUtilisationController {
       const { libele_type } = req.body;
 
       if (!libele_type || libele_type.trim() === "") {
-        return res.status(400).json({
+        return res. json({
           success: false,
           message: "Le libellé est requis"
         });
@@ -19,7 +19,7 @@ class TypeUtilisationController {
       });
 
       if (existingType) {
-        return res.status(409).json({
+        return res. json({
           success: false,
           message: "Ce type d'utilisation existe déjà"
         });
@@ -46,14 +46,14 @@ class TypeUtilisationController {
         type: "type_utilisation_creation"
       });
 
-      return res.status(201).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation créé avec succès",
         typeUtilisation
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({
+      return res.json({
         success: false,
         message: "Erreur interne du serveur"
       });
@@ -64,15 +64,14 @@ class TypeUtilisationController {
   static async getAllTypesUtilisation(req, res) {
     try {
       const types = await TypeUtilisation.findAll();
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Types d'utilisation récupérés avec succès",
         types
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -83,20 +82,18 @@ class TypeUtilisationController {
       const { id } = req.params;
       const type = await TypeUtilisation.findByPk(id);
       if (!type) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation récupéré avec succès",
         type
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -108,22 +105,20 @@ class TypeUtilisationController {
       const { libele_type } = req.body;
       const typeUtilisation = await TypeUtilisation.findByPk(id);
       if (!typeUtilisation) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
       typeUtilisation.libele_type = libele_type;
       await typeUtilisation.save();
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation mis à jour avec succès",
         typeUtilisation
       });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
+      return res 
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
@@ -135,20 +130,18 @@ class TypeUtilisationController {
 
       const typeUtilisation = await TypeUtilisation.findByPk(id);
       if (!typeUtilisation) {
-        return res
-          .status(404)
+        return res 
           .json({ success: false, message: "Type d'utilisation non trouvé" });
       }
 
       await typeUtilisation.destroy();
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Type d'utilisation supprimé avec succès"
       });
     } catch (error) {
       console.error(error);
       return res
-        .status(500)
         .json({ success: false, message: "Erreur interne du serveur" });
     }
   }

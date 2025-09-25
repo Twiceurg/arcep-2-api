@@ -10,9 +10,7 @@ module.exports = (sequelize, DataTypes) => {
     static associate(models) {
       AttributionNumero.belongsTo(models.Client, { foreignKey: "client_id" });
       AttributionNumero.belongsTo(models.Service, { foreignKey: "service_id" });
-      AttributionNumero.belongsTo(models.TypeUtilisation, {
-        foreignKey: "type_utilisation_id"
-      });
+
       AttributionNumero.belongsTo(models.Pnn, { foreignKey: "pnn_id" });
       AttributionNumero.belongsTo(models.Utilisation, {
         foreignKey: "utilisation_id"
@@ -25,26 +23,36 @@ module.exports = (sequelize, DataTypes) => {
         onDelete: "CASCADE",
         onUpdate: "CASCADE"
       });
+      AttributionNumero.belongsTo(models.ZoneUtilisation, {
+        foreignKey: "zone_utilisation_id"
+      });
       AttributionNumero.hasMany(models.Renouvellement, {
         foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.AttributionDecision, {
-        foreignKey: 'attribution_id',
+        foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.HistoriqueAttribution, {
-        foreignKey: 'attribution_id',
+        foreignKey: "attribution_id"
       });
       AttributionNumero.hasMany(models.HistoriqueAttributionNumero, {
-        foreignKey: 'attribution_id', 
+        foreignKey: "attribution_id"
+      });
+      AttributionNumero.belongsToMany(models.TypeUtilisation, {
+        through: "TypeUtilisationAttributionNumeros",
+        foreignKey: "attribution_numero_id",
+        otherKey: "type_utilisation_id"
       });
     }
   }
   AttributionNumero.init(
     {
-      type_utilisation_id: {
+      id: {
         type: DataTypes.INTEGER,
-        allowNull: true
+        primaryKey: true,
+        autoIncrement: true
       },
+
       service_id: {
         type: DataTypes.INTEGER,
         allowNull: true
@@ -57,7 +65,7 @@ module.exports = (sequelize, DataTypes) => {
         type: DataTypes.INTEGER,
         allowNull: true
       },
- 
+
       utilisation_id: {
         type: DataTypes.INTEGER,
         allowNull: true,
@@ -66,16 +74,18 @@ module.exports = (sequelize, DataTypes) => {
           key: "id"
         }
       },
-      reference_decision: {
-        type: DataTypes.STRING,
-        allowNull: true
-      },
+
       regle: {
         type: DataTypes.STRING,
         allowNull: true
       },
+      utiliter: {
+        type: DataTypes.TEXT,
+        allowNull: true
+      },
+
       date_attribution: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.DATE,
         allowNull: true
       },
       etat_autorisation: {

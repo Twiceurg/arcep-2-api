@@ -66,12 +66,14 @@ class DemandeController {
         etat
       });
 
-      res
-        .status(201)
-        .json({ success: true, message: "Demande créée avec succès", demande });
+      res.json({
+        success: true,
+        message: "Demande créée avec succès",
+        demande
+      });
     } catch (error) {
       console.error(error);
-      res.status(500).json({
+      res.json({
         success: false,
         message: "Erreur lors de la création de la demande"
       });
@@ -90,14 +92,14 @@ class DemandeController {
         ]
       });
 
-      res.status(200).json({
+      res.json({
         success: true,
         message: "Demandes récupérées avec succès",
         demandes
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({
+      res.json({
         success: false,
         message: "Erreur lors de la récupération des demandes"
       });
@@ -119,13 +121,11 @@ class DemandeController {
 
       // Vérifie si la demande existe
       if (!demande) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Demande non trouvée" });
+        return res.json({ success: false, message: "Demande non trouvée" });
       }
 
       // Si la demande est trouvée, renvoie les données avec un message de succès
-      res.status(200).json({
+      res.json({
         success: true,
         message: "Demande récupérée avec succès",
         demande
@@ -133,7 +133,7 @@ class DemandeController {
     } catch (error) {
       console.error(error);
       // En cas d'erreur, renvoie un message d'erreur général
-      res.status(500).json({
+      res.json({
         success: false,
         message: "Erreur lors de la récupération de la demande"
       });
@@ -178,9 +178,7 @@ class DemandeController {
       const demande = await Demande.findByPk(id);
 
       if (!demande) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Demande non trouvée" });
+        return res.json({ success: false, message: "Demande non trouvée" });
       }
 
       await demande.update({
@@ -211,17 +209,17 @@ class DemandeController {
         pieces_identite,
         description_activites,
         licences,
-        etat:"accepte"
+        etat: "accepte"
       });
 
-      res.status(200).json({
+      res.json({
         success: true,
         message: "Demande mise à jour avec succès",
         demande
       });
     } catch (error) {
       console.error(error);
-      res.status(500).json({
+      res.json({
         success: false,
         message: "Erreur lors de la mise à jour de la demande"
       });
@@ -235,18 +233,14 @@ class DemandeController {
       const demande = await Demande.findByPk(id);
 
       if (!demande) {
-        return res
-          .status(404)
-          .json({ success: false, message: "Demande non trouvée" });
+        return res.json({ success: false, message: "Demande non trouvée" });
       }
 
       await demande.destroy();
-      res
-        .status(204)
-        .json({ success: true, message: "Demande supprimée avec succès" });
+      res.json({ success: true, message: "Demande supprimée avec succès" });
     } catch (error) {
       console.error(error);
-      res.status(500).json({
+      res.json({
         success: false,
         message: "Erreur lors de la suppression de la demande"
       });
@@ -262,13 +256,13 @@ class DemandeController {
       // Vérifie si l'état est valide
       const validStates = ["en attente", "rejete", "traite", "accepte"];
       if (!validStates.includes(etat)) {
-        return res.status(400).json({ message: "État invalide" });
+        return res. json({ message: "État invalide" });
       }
 
       // Recherche la demande par son ID
       const demande = await Demande.findByPk(id);
       if (!demande) {
-        return res.status(404).json({ message: "Demande non trouvée" });
+        return res. json({ message: "Demande non trouvée" });
       }
 
       // Mise à jour de l'état
@@ -276,14 +270,14 @@ class DemandeController {
       await demande.save();
 
       // Réponse succès
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "État de la demande mis à jour avec succès",
         data: demande
       });
     } catch (error) {
       console.error("Erreur lors de la mise à jour de l'état :", error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ message: "Erreur interne du serveur" });
     }
   }
 }

@@ -13,7 +13,7 @@ const getNotifications = async (req, res) => {
     res.json({ success: true, notifications });
   } catch (error) {
     console.error("Erreur lors de la récupération des notifications :", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
+    res.json({ success: false, message: "Erreur serveur" });
   }
 };
 
@@ -24,14 +24,11 @@ const markAsRead = async (req, res) => {
     const notification = await Notification.findByPk(id);
 
     if (!notification) {
-      return res
-        .status(404)
-        .json({ success: false, message: "Notification non trouvée" });
+      return res.json({ success: false, message: "Notification non trouvée" });
     }
 
     if (notification.read) {
-      return res 
-        .json({ success: false, message: "Notification déjà lue" });
+      return res.json({ success: false, message: "Notification déjà lue" });
     }
 
     notification.read = true;
@@ -40,7 +37,7 @@ const markAsRead = async (req, res) => {
     res.json({ success: true, message: "Notification marquée comme lue" });
   } catch (error) {
     console.error("Erreur lors de la mise à jour :", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
+    res.json({ success: false, message: "Erreur serveur" });
   }
 };
 
@@ -59,7 +56,7 @@ const markAllAsRead = async (req, res) => {
     });
   } catch (error) {
     console.error("Erreur lors de la mise à jour globale :", error);
-    res.status(500).json({ success: false, message: "Erreur serveur" });
+    res.json({ success: false, message: "Erreur serveur" });
   }
 };
 
@@ -74,8 +71,10 @@ const getUnreadNotifications = async (req, res) => {
     });
 
     if (notifications.length === 0) {
-      return res
-        .json({ success: false, message: "Aucune notification non lue." });
+      return res.json({
+        success: false,
+        message: "Aucune notification non lue."
+      });
     }
 
     res.json({ success: true, notifications });
@@ -84,7 +83,7 @@ const getUnreadNotifications = async (req, res) => {
       "Erreur lors de la récupération des notifications non lues :",
       error
     );
-    res.status(500).json({ success: false, message: "Erreur serveur" });
+    res.json({ success: false, message: "Erreur serveur" });
   }
 };
 

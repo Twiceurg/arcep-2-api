@@ -9,7 +9,7 @@ class UtilisationController {
       // Vérifier si le service existe
       const service = await Service.findByPk(service_id);
       if (!service) {
-        return res.status(400).json({ message: "Service not found" });
+        return res. json({ message: "Service not found" });
       }
 
       // Récupérer l'ID de la catégorie depuis le service
@@ -22,7 +22,7 @@ class UtilisationController {
         category_id
       });
 
-      return res.status(201).json({
+      return res. json({
         message: "Utilisation created successfully!",
         success: true,
         data: utilisation
@@ -46,19 +46,19 @@ class UtilisationController {
       });
 
       if (utilisations.length === 0) {
-        return res.status(404).json({
+        return res .json({
           message: "No utilisations found for this service.",
           success: false
         });
       }
 
-      return res.status(200).json({
+      return res. json({
         message: "Utilisations by service retrieved successfully!",
         success: true,
         data: utilisations
       });
     } catch (error) {
-      return res.status(500).json({
+      return res. json({
         message: "Error retrieving utilisations by service.",
         success: false,
         error
@@ -73,13 +73,13 @@ class UtilisationController {
         include: [{ model: Service }]
       });
 
-      return res.status(200).json({
+      return res. json({
         message: "All utilisations retrieved successfully!",
         success: true,
         data: utilisations
       });
     } catch (error) {
-      return res.status(500).json({
+      return res.json({
         message: "Error retrieving utilisations.",
         success: false,
         error
@@ -99,19 +99,19 @@ class UtilisationController {
       });
 
       if (!utilisation) {
-        return res.status(404).json({
+        return res.json({
           message: "Utilisation not found.",
           success: false
         });
       }
 
-      return res.status(200).json({
+      return res. json({
         message: "Utilisation retrieved successfully!",
         success: true,
         data: utilisation
       });
     } catch (error) {
-      return res.status(500).json({
+      return res.json({
         message: "Error retrieving Utilisation.",
         success: false,
         error
@@ -128,13 +128,13 @@ class UtilisationController {
       // Vérifier si le service existe
       const service = await Service.findByPk(service_id);
       if (!service) {
-        return res.status(400).json({ message: "Service not found" });
+        return res. json({success: false, message: "Service not found" });
       }
 
       // Vérifier si l'utilisation existe
       const utilisation = await Utilisation.findByPk(id);
       if (!utilisation) {
-        return res.status(404).json({ message: "Utilisation not found" });
+        return res.json({success: false, message: "Utilisation not found" });
       }
 
       // Mettre à jour l'utilisation
@@ -143,13 +143,13 @@ class UtilisationController {
       utilisation.category_id = service.category_id;
 
       await utilisation.save();
-      return res.status(200).json({
+      return res. json({
         message: "Utilisation updated successfully!",
         success: true,
         data: utilisation
       });
     } catch (error) {
-      return res.status(500).json({
+      return res.json({
         message: "Error updating Utilisation.",
         success: false,
         error
@@ -163,19 +163,19 @@ class UtilisationController {
       const { id } = req.params;
       const utilisation = await Utilisation.findByPk(id);
       if (!utilisation) {
-        return res.status(404).json({
+        return res.json({
           message: "Utilisation not found.",
           success: false
         });
       }
 
       await utilisation.destroy();
-      return res.status(204).json({
+      return res.json({
         message: "Utilisation deleted successfully!",
         success: true
       });
     } catch (error) {
-      return res.status(500).json({
+      return res. json({
         message: "Error deleting Utilisation.",
         success: false,
         error

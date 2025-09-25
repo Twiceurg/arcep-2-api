@@ -21,6 +21,9 @@ module.exports = (sequelize, DataTypes) => {
       });
       Pnn.belongsTo(models.Category, { foreignKey: "category_id" });
       Pnn.belongsTo(models.Utilisation, { foreignKey: "utilisation_id" });
+      Pnn.belongsTo(models.ZoneUtilisation, {
+        foreignKey: "zone_utilisation_id"
+      });
     }
   }
   Pnn.init(
@@ -35,19 +38,23 @@ module.exports = (sequelize, DataTypes) => {
       },
       partition_length: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: true
       },
       bloc_min: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: true
       },
       category_id: {
         type: DataTypes.INTEGER,
         allowNull: true
       },
+      zone_utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
       block_max: {
         type: DataTypes.INTEGER,
-        allowNull: false
+        allowNull: true
       },
       etat: {
         type: DataTypes.BOOLEAN,
@@ -68,7 +75,7 @@ module.exports = (sequelize, DataTypes) => {
       // },
       service_id: {
         type: DataTypes.INTEGER,
-        allowNull: false,
+        allowNull: true,
         references: {
           model: "Services",
           key: "id"

@@ -68,23 +68,26 @@
       <div class="email-content">
         <p>Bonjour,</p>
         <p>
-          Nous vous informons que la décision de type
-          <strong>{{type_decision}}</strong> pour la référence
-          <strong>{{reference_decision}}</strong> va expirer dans les
-          {{timeRemaining}}. Il est maintenant nécessaire que vous notifiiez le
-          client et lui demandiez de procéder au renouvellement dans les plus
-          brefs délais afin de garantir la continuité du service.
+          Nous vous informons que les décisions suivantes nécessitent votre
+          attention :
         </p>
+
+        <ul>
+          {{#decisions}}
+          <li>
+            <strong>Type de décision :</strong> {{type_decision}}<br />
+            <strong>Référence :</strong> {{reference_decision}}<br />
+            <strong>Client :</strong> {{clientName}}<br />
+            <strong>Date d'expiration :</strong> {{date_expiration}}<br />
+            <strong>Temps restant :</strong> {{timeRemaining}}<br />
+            <strong>Notification :</strong> {{notificationType}}
+          </li>
+          {{/decisions}}
+        </ul>
+
         <p>
-          <strong>Référence de la décision : </strong>{{reference_decision}} du client {{clientName}}
-        </p>
-        <p><strong>Type de décision : </strong>{{type_decision}}</p>
-        <p><strong>Date d'expiration : </strong>{{date_expiration}}</p>
-        <p>
-          Veuillez contacter le client directement pour lui rappeler la
-          nécessité du renouvellement. Pour toute question ou précision
-          supplémentaire, vous pouvez consulter l'espace interne ou nous
-          contacter.
+          Veuillez contacter directement les clients pour leur rappeler la
+          nécessité de procéder aux actions requises.
         </p>
       </div>
 

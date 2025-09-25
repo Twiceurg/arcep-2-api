@@ -9,14 +9,14 @@ const getAllUsers = async (req, res) => {
     // Récupérer tous les utilisateurs
     const users = await Utilisateur.findAll();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Liste des utilisateurs récupérée avec succès.",
       data: users
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message: "Erreur serveur lors de la récupération des utilisateurs."
     });
@@ -48,7 +48,8 @@ const ajouterUtilisateurLDAP = async (req, res) => {
     }
 
     // Si l'email n'est pas fourni, on le génère à partir du nom d'utilisateur ou d'autres données
-    const utilisateurEmail = email || ldapUser.email || `${username}@exemple.com`;
+    const utilisateurEmail =
+      email || ldapUser.email || `${username}@exemple.com`;
 
     // Vérifie si l'utilisateur existe déjà en base de données
     const utilisateurExist = await Utilisateur.findOne({ where: { username } });
@@ -92,7 +93,6 @@ const ajouterUtilisateurLDAP = async (req, res) => {
   }
 };
 
-
 const changeUserRole = async (req, res) => {
   const { userId } = req.params; // ID de l'utilisateur à modifier
   const { role } = req.body; // Nouveau rôle à affecter
@@ -110,7 +110,7 @@ const changeUserRole = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(userId);
 
     if (!utilisateur) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         message: "Utilisateur non trouvé."
       });
@@ -122,7 +122,7 @@ const changeUserRole = async (req, res) => {
     // Sauvegarder les modifications
     await utilisateur.save();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: `Rôle de l'utilisateur modifié en ${role}.`,
       data: utilisateur
@@ -152,7 +152,7 @@ const deleteUser = async (req, res) => {
 
     await user.destroy();
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Utilisateur supprimé avec succès."
     });
@@ -217,7 +217,7 @@ const resetPassword = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(utilisateurId);
 
     if (!utilisateur) {
-      return res.status(404).json({ message: "Utilisateur non trouvé." });
+      return res.json({ success: false, message: "Utilisateur non trouvé." });
     }
 
     // Définir le mot de passe par défaut
@@ -231,15 +231,13 @@ const resetPassword = async (req, res) => {
     // Sauvegarder les changements
     await utilisateur.save();
 
-    return res
-      .status(200)
-      .json({ message: "Mot de passe réinitialisé avec succès." });
+    return res.json({ message: "Mot de passe réinitialisé avec succès." });
   } catch (error) {
     console.error(
       "Erreur lors de la réinitialisation du mot de passe :",
       error
     );
-    return res.status(500).json({
+    return res.json({
       message: "Erreur serveur lors de la réinitialisation du mot de passe."
     });
   }
@@ -254,20 +252,20 @@ const getUserDetails = async (req, res) => {
     const utilisateur = await Utilisateur.findByPk(utilisateurId);
 
     if (!utilisateur) {
-      return res.status(404).json({
+      return res.json({
         success: false,
         message: "Utilisateur non trouvé."
       });
     }
 
-    return res.status(200).json({
+    return res.json({
       success: true,
       message: "Détails de l'utilisateur récupérés avec succès.",
       data: utilisateur
     });
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    return res.json({
       success: false,
       message:
         "Erreur serveur lors de la récupération des détails de l'utilisateur."

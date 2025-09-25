@@ -24,11 +24,11 @@ module.exports = {
         allowNull: false,   
       },
       date_renouvellement: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: false, 
       },
       date_expiration_renouvellement: {
-        type: Sequelize.DATEONLY,
+        type: Sequelize.DATE,
         allowNull: false,  
       },
       decision_id: {   

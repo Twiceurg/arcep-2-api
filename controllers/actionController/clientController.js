@@ -27,9 +27,10 @@ class ClientController {
           where: { email_morale }
         });
         if (existingClient) {
-          return res
-            .status(400)
-            .json({ message: "Un client avec cet email existe déjà." });
+          return res.json({
+            success: false,
+            message: "Un client avec cet email existe déjà."
+          });
         }
       }
 
@@ -45,14 +46,14 @@ class ClientController {
         activite
       });
 
-      return res.status(201).json({
+      return res. json({
         success: true,
         message: "Client créé avec succès",
         client
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -66,13 +67,13 @@ class ClientController {
         order: [["created_at", "DESC"]]
       });
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         clients
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res. json({ message: "Erreur interne du serveur" });
     }
   }
 
@@ -85,16 +86,16 @@ class ClientController {
       });
 
       if (!client) {
-        return res.status(404).json({ message: "Client non trouvé" });
+        return res.json({ success: false, message: "Client non trouvé" });
       }
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         client
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -122,7 +123,7 @@ class ClientController {
 
       const client = await Client.findByPk(id);
       if (!client) {
-        return res.status(404).json({ message: "Client non trouvé" });
+        return res.json({ success: false, message: "Client non trouvé" });
       }
 
       client.denomination = denomination;
@@ -136,14 +137,14 @@ class ClientController {
 
       await client.save();
 
-      return res.status(200).json({
+      return res. json({
         success: true,
         message: "Client mis à jour avec succès",
         client
       });
     } catch (error) {
       console.error(error);
-      return res.status(500).json({ message: "Erreur interne du serveur" });
+      return res.json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 
@@ -154,18 +155,16 @@ class ClientController {
 
       const client = await Client.findByPk(id);
       if (!client) {
-        return res.status(404).json({ message: "Client non trouvé" });
+        return res.json({success: false, message: "Client non trouvé" });
       }
 
       await client.destroy();
-      return res
-        .status(200)
+      return res 
         .json({ success: true, message: "Client supprimé avec succès" });
     } catch (error) {
       console.error(error);
-      return res
-        .status(500)
-        .json({ success: flase, message: "Erreur interne du serveur" });
+      return res 
+        .json({ success: false, message: "Erreur interne du serveur" });
     }
   }
 }

@@ -19,6 +19,23 @@ module.exports = (sequelize, DataTypes) => {
       NumeroAttribue.belongsTo(models.Utilisation, {
         foreignKey: "utilisation_id"
       });
+      NumeroAttribue.belongsTo(models.ZoneUtilisation, {
+        foreignKey: "zone_utilisation_id"
+      });
+
+      NumeroAttribue.belongsToMany(models.AttributionDecision, {
+        through: models.DecisionNumero,
+        foreignKey: "numero_attribue_id",
+        otherKey: "decision_id",
+        as: "decisions"
+      });
+
+      //  NumeroAttribue.belongsToMany(models.AttributionDecision, {
+      //   through: models.DecisionNumero,
+      //   foreignKey: "numero_attribue_id",
+      //   otherKey: "decision_id",
+      //   as: "decisions",
+      // });
     }
   }
   NumeroAttribue.init(
@@ -40,8 +57,22 @@ module.exports = (sequelize, DataTypes) => {
           key: "id"
         }
       },
+
+      //  decision_id: {
+      //   type: DataTypes.INTEGER,
+      //   allowNull: true,
+      //   references: {
+      //     model: "AttributionDecisions",
+      //     key: "id",
+      //   },
+      //   onDelete: "CASCADE",
+      // },
+      zone_utilisation_id: {
+        type: DataTypes.INTEGER,
+        allowNull: true
+      },
       date_attribution: {
-        type: DataTypes.DATEONLY,
+        type: DataTypes.DATE,
         allowNull: true
       },
       pnn_id: {
